@@ -27,12 +27,20 @@ describe("CredentialRepository", () => {
 		const { api, values } = storage();
 		const repository = new CredentialRepository(api);
 
-		expect(repository.storeValues({ openAI: "  sk-openai  ", deepgram: "dg-key" })).toEqual({
+		expect(
+			repository.storeValues({
+				openAI: "  sk-openai  ",
+				deepgram: "dg-key",
+				elevenLabs: "el-key",
+			}),
+		).toEqual({
 			openAISecretId: "podnotes-openai-api-key",
 			deepgramSecretId: "podnotes-deepgram-api-key",
+			elevenLabsSecretId: "podnotes-elevenlabs-api-key",
 		});
 		expect(values.get("podnotes-openai-api-key")).toBe("sk-openai");
 		expect(values.get("podnotes-deepgram-api-key")).toBe("dg-key");
+		expect(values.get("podnotes-elevenlabs-api-key")).toBe("el-key");
 		expect(api.getSecret).toHaveBeenCalledWith("podnotes-openai-api-key");
 	});
 
@@ -177,5 +185,22 @@ describe("CredentialRepository", () => {
 				requireConfigured: true,
 			}),
 		).toThrow("not available in SecretStorage on this device");
+	});
+
+	it("names the provider whose configured key is missing from an explicit export", () => {
+		const { api } = storage({ "podnotes-openai-api-key": "sk" });
+		const repository = new CredentialRepository(api);
+
+		expect(() =>
+			repository.exportValues(
+				settings({
+					openAISecretId: "podnotes-openai-api-key",
+					deepgramSecretId: "podnotes-deepgram-api-key",
+				}),
+				{ requireConfigured: true },
+			),
+		).toThrow(
+			"The selected Deepgram API key is not available in SecretStorage on this device.",
+		);
 	});
 });

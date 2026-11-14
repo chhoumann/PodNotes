@@ -5,8 +5,9 @@ import type { Playlist } from "./Playlist";
 import type { Episode } from "./Episode";
 import type DownloadedEpisode from "./DownloadedEpisode";
 import type { NextTrackAction, PreviousTrackAction } from "./Headset";
+import type { CredentialReferenceSettings } from "./Credentials";
 
-export interface IPodNotesSettings {
+export interface IPodNotesSettings extends CredentialReferenceSettings {
 	savedFeeds: { [podcastName: string]: PodcastFeed };
 	podNotes: { [episodeName: string]: PodNote };
 	defaultPlaybackRate: number;
@@ -58,21 +59,23 @@ export interface IPodNotesSettings {
 		path: string;
 	};
 	downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] };
-	/** SecretStorage ID for the OpenAI API key. Never contains the key itself. */
-	openAISecretId: string;
-	/** SecretStorage ID for the Deepgram API key. Never contains the key itself. */
-	deepgramSecretId: string;
 	transcript: {
 		path: string;
 		template: string;
+		/** The ID of the provider that transcribes audio. One this version does not have is kept as stored. */
+		provider: string;
+		/** The ID of one of the provider's models, or "" to follow the model PodNotes recommends. */
+		model: string;
 		/**
-		 * Speaker labels for transcripts. When `enabled` and `provider` is `"deepgram"`, audio
-		 * goes to Deepgram, which labels speakers. Otherwise it goes to OpenAI, which does not.
+		 * `enabled` asks for speaker labels, which the chosen model may not have.
 		 * `speakerTemplate` shapes each label, where `{{speaker}}` is the speaker's name.
+		 *
+		 * Versions up to 2.24.0 kept their provider here, as `provider`. It fills
+		 * `transcript.provider` in a library that has none, and stays in data.json as found
+		 * for the devices that still run those versions.
 		 */
 		diarization: {
 			enabled: boolean;
-			provider: "openai" | "deepgram";
 			speakerTemplate: string;
 		};
 	};

@@ -7,7 +7,8 @@ import {
 	type PersistedPodNotesSettings,
 	PodNotesDataError,
 } from "./persistence/podNotesData";
-import type { CredentialValues } from "./types/Credentials";
+import { choseDeepgram } from "./settingsMigrations";
+import { CREDENTIAL_KINDS, CREDENTIALS, type CredentialValues } from "./types/Credentials";
 import type { Episode } from "./types/Episode";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { ownRecord } from "./utility/ownRecord";
@@ -35,22 +36,15 @@ export const VAULT_LOCAL_KEYS: readonly (keyof IPodNotesSettings)[] = [
 ];
 
 /** Provider API-key references are device-local, not settings transfer data. */
-const SECRET_REFERENCE_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
-	"openAISecretId",
-	"deepgramSecretId",
-]);
+const SECRET_REFERENCE_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set(
+	CREDENTIAL_KINDS.map((kind) => CREDENTIALS[kind].settingsKey),
+);
 
+/** Plaintext fields that versions before 2.19.0 wrote. No new kind joins them. */
 const LEGACY_SECRET_KEYS = {
 	openAIApiKey: "openAI",
 	diarizationApiKey: "deepgram",
 } as const;
-
-/** Human-facing names for each secret, so export/import copy can name exactly
- * which keys leave or enter the vault instead of hard-coding "OpenAI". */
-const SECRET_KEY_LABELS: Record<keyof CredentialValues, string> = {
-	openAI: "OpenAI API key",
-	deepgram: "Deepgram API key",
-};
 
 /**
  * The human-facing labels for the secrets actually present (non-empty) in a
@@ -59,9 +53,9 @@ const SECRET_KEY_LABELS: Record<keyof CredentialValues, string> = {
  * user is never told only "OpenAI API key" (and vice versa). See issue #168.
  */
 export function describeSecrets(secrets: CredentialValues): string[] {
-	return (Object.keys(SECRET_KEY_LABELS) as (keyof CredentialValues)[])
-		.filter((key) => Boolean(secrets[key]?.trim()))
-		.map((key) => SECRET_KEY_LABELS[key]);
+	return CREDENTIAL_KINDS.filter((kind) =>
+		Boolean(secrets[CREDENTIALS[kind].exportKey]?.trim()),
+	).map((kind) => `${CREDENTIALS[kind].label} API key`);
 }
 
 /** Known top-level setting keys that are safe to import (excludes vault-local state). */
@@ -131,6 +125,15 @@ function portable<T extends object>(settings: T): T {
 					}
 				: feed,
 		);
+	}
+	// Versions up to 2.24.0 import this object whole and read its provider as their own
+	// speaker-label provider, so it names Deepgram exactly when the library uses Deepgram.
+	if (isPlainObject(out.transcript) && isPlainObject(out.transcript.diarization)) {
+		const provider = out.transcript.provider === "deepgram" ? "deepgram" : "openai";
+		out.transcript = {
+			...out.transcript,
+			diarization: { ...out.transcript.diarization, provider },
+		};
 	}
 	for (const key of ["queue", "favorites"]) {
 		if (key in out) out[key] = portablePlaylist(out[key]);
@@ -315,6 +318,14 @@ export function mergeImportedSettings(
 			...(imported[key] as object | undefined),
 		} as never;
 	}
+	// Only the speaker settings a file names change. The provider that versions up to
+	// 2.24.0 store beside them stays as this library stored it.
+	const { enabled, speakerTemplate } = imported.transcript?.diarization ?? {};
+	merged.transcript.diarization = {
+		...current.transcript.diarization,
+		...(enabled === undefined ? {} : { enabled }),
+		...(speakerTemplate === undefined ? {} : { speakerTemplate }),
+	};
 
 	// Converge import and startup on the same deep validators and date revival.
 	// Mark the in-memory merge as current so it cannot be mistaken for a legacy
@@ -337,13 +348,14 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 		if (!typeMatchesDefault(defaultValue, value)) continue;
 
 		if ((NESTED_KEYS as readonly string[]).includes(key)) {
-			out[key] = sanitizeNestedObject(
+			const nested = sanitizeNestedObject(
 				{
 					...(defaultValue as object),
 					...OPTIONAL_NESTED_FIELDS[key],
 				},
 				value as Record<string, unknown>,
 			);
+			out[key] = key === "transcript" ? withReleasedProvider(nested) : nested;
 		} else if (key === "favorites") {
 			// Built-in playlist objects must carry an `episodes` array; consumers
 			// iterate it without guarding. Drop the key when it's malformed so the merge falls
@@ -361,6 +373,18 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 	}
 
 	return out;
+}
+
+/**
+ * A file from a version up to 2.24.0 names no transcription provider. Speaker labels with
+ * Deepgram is the one provider choice it can hold, so that carries over. Any other file
+ * leaves the library's provider as it is.
+ */
+function withReleasedProvider(transcript: Record<string, unknown>): Record<string, unknown> {
+	const { provider, diarization } = transcript;
+	return typeof provider !== "string" && isPlainObject(diarization) && choseDeepgram(diarization)
+		? { ...transcript, provider: "deepgram", model: "" }
+		: transcript;
 }
 
 function extractLegacySecrets(source: Record<string, unknown>): CredentialValues {
@@ -382,9 +406,10 @@ function parseSecretsPayload(value: unknown): { values: CredentialValues } | { e
 		return { error: "Export file has an invalid secrets payload." };
 	}
 
-	for (const key of ["openAI", "deepgram"] as const) {
-		if (value[key] !== undefined && typeof value[key] !== "string") {
-			return { error: `Export file has an invalid ${SECRET_KEY_LABELS[key]}.` };
+	for (const kind of CREDENTIAL_KINDS) {
+		const { exportKey, label } = CREDENTIALS[kind];
+		if (value[exportKey] !== undefined && typeof value[exportKey] !== "string") {
+			return { error: `Export file has an invalid ${label} API key.` };
 		}
 	}
 
@@ -392,12 +417,13 @@ function parseSecretsPayload(value: unknown): { values: CredentialValues } | { e
 }
 
 function normalizeSecrets(values: CredentialValues): CredentialValues {
-	const openAI = values.openAI?.trim();
-	const deepgram = values.deepgram?.trim();
-	return {
-		...(openAI ? { openAI } : {}),
-		...(deepgram ? { deepgram } : {}),
-	};
+	const normalized: CredentialValues = {};
+	for (const kind of CREDENTIAL_KINDS) {
+		const key = CREDENTIALS[kind].exportKey;
+		const value = values[key]?.trim();
+		if (value) normalized[key] = value;
+	}
+	return normalized;
 }
 
 /** Drop any playlist entry that isn't a plain object with an `episodes` array. */

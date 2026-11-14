@@ -8,10 +8,10 @@ import type { Provider } from "./types";
  * speaker labels. OpenAI shuts down its other transcription models on 2027-02-26.
  */
 export const openai: Provider = {
-	label: "OpenAI",
 	models: [
 		{
 			id: "gpt-transcribe",
+			label: "GPT Transcribe",
 			speakers: false,
 			url: false,
 			// OpenAI's limit is 25 MB a request.

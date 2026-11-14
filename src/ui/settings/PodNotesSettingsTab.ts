@@ -45,23 +45,28 @@ import { exportOPML, importOPML } from "src/opml";
 import { isOption } from "src/persistence/codecUtils";
 import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
 import { privateFeedAddresses, protectPrivateFeeds } from "src/services/privateFeeds";
+import { offeredModels, PROVIDER_LABELS, transcriptionChoice } from "src/services/transcription";
 import {
 	describeSecrets,
 	mergeImportedSettings,
 	parseImport,
 	serializeSettings,
 } from "src/settingsTransfer";
-import type { CredentialKind, CredentialValues } from "src/types/Credentials";
+import {
+	CREDENTIAL_KINDS,
+	CREDENTIALS,
+	type CredentialKind,
+	type CredentialSettingsKey,
+	type CredentialValues,
+} from "src/types/Credentials";
 import { observePersistedStoreChanges } from "src/store/persistence";
 import { PLAYBACK_RATES } from "src/utility/playbackRate";
 
-type SecretReferenceKey = "openAISecretId" | "deepgramSecretId";
 type SettingsControl =
 	| HTMLButtonElement
 	| HTMLInputElement
 	| HTMLSelectElement
 	| HTMLTextAreaElement;
-type Diarization = IPodNotesSettings["transcript"]["diarization"];
 
 interface SecretReferenceSaveResult {
 	persistedId: string;
@@ -80,11 +85,6 @@ interface TextField {
 	max?: number;
 	preview?(value: string, setting: Setting): void;
 }
-
-const DIARIZATION_PROVIDERS = {
-	openai: "OpenAI (no speaker labels)",
-	deepgram: "Deepgram",
-};
 
 const TYPING_SAVE_DELAY_MS = 500;
 
@@ -225,10 +225,9 @@ function restoreFailedImportChanges(
 	}
 }
 
-const CREDENTIAL_KIND_BY_REFERENCE: Record<SecretReferenceKey, CredentialKind> = {
-	openAISecretId: "openai",
-	deepgramSecretId: "deepgram",
-};
+const CREDENTIAL_KIND_BY_REFERENCE = Object.fromEntries(
+	CREDENTIAL_KINDS.map((kind) => [CREDENTIALS[kind].settingsKey, kind]),
+) as Record<CredentialSettingsKey, CredentialKind>;
 
 function stackSettingVertically(setting: Setting): void {
 	setting.settingEl.setCssStyles({
@@ -242,10 +241,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
 	private settingsMutationTail: Promise<void> = Promise.resolve();
-	private credentialSaveGenerations: Record<SecretReferenceKey, number> = {
-		openAISecretId: 0,
-		deepgramSecretId: 0,
-	};
+	private readonly credentialSaveGenerations = new Map<CredentialSettingsKey, number>();
 	private settingsInteractionLockCount = 0;
 	private settingsControlDisabledStates = new Map<SettingsControl, boolean>();
 	private readonly drafts = new Set<() => void>();
@@ -258,7 +254,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	override getSettingDefinitions(): SettingDefinitionGroup[] {
-		const diarization = () => this.plugin.settings.transcript.diarization;
 		const pathPreview =
 			(engine: (template: string, episode: Episode) => string, suffix = "") =>
 			(value: string, setting: Setting) =>
@@ -348,7 +343,21 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				}),
 			]),
 			group("Transcripts", [
-				this.secretRow("OpenAI API key", "openAISecretId"),
+				this.providerRow(),
+				...CREDENTIAL_KINDS.map((kind) => ({
+					...this.secretRow(kind),
+					visible: () => transcriptionChoice(this.plugin.settings).provider === kind,
+				})),
+				this.modelRow(),
+				this.speakerLabelsRow(),
+				{
+					...this.textRow(
+						"Speaker label format",
+						this.text((settings) => settings.transcript.diarization, "speakerTemplate"),
+						"{{speaker}} is the speaker's label.",
+					),
+					visible: () => transcriptionChoice(this.plugin.settings).speakers,
+				},
 				this.textRow("Transcript path", {
 					...this.text((settings) => settings.transcript, "path"),
 					preview: pathPreview(FilePathTemplateEngine),
@@ -357,41 +366,6 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					...this.text((settings) => settings.transcript, "template"),
 					kind: "template",
 				}),
-				{
-					name: "Speaker diarization",
-					desc: "Label transcript turns by speaker.",
-					render: (setting) =>
-						void setting.addToggle((toggle) =>
-							toggle.setValue(diarization().enabled).onChange((on) => {
-								diarization().enabled = on;
-								this.changed();
-							}),
-						),
-				},
-				this.whenDiarizing(
-					this.dropdownRow(
-						"Diarization provider",
-						DIARIZATION_PROVIDERS,
-						() => diarization().provider,
-						(provider) => {
-							diarization().provider = provider;
-						},
-						"Deepgram needs its own API key.",
-					),
-					({ enabled }) => enabled,
-				),
-				this.whenDiarizing(
-					this.secretRow("Deepgram API key", "deepgramSecretId"),
-					({ enabled, provider }) => enabled && provider === "deepgram",
-				),
-				this.whenDiarizing(
-					this.textRow(
-						"Speaker label format",
-						this.text((settings) => settings.transcript.diarization, "speakerTemplate"),
-						"{{speaker}} is the speaker's label.",
-					),
-					({ enabled }) => enabled,
-				),
 			]),
 			group("Downloads", [
 				this.textRow("Download path", {
@@ -437,7 +411,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				),
 				{
 					name: "Include API keys",
-					desc: "Adds this device's OpenAI and Deepgram keys to the file as plain text. The file is in your vault, so it may sync to other devices and other plugins can read it.",
+					desc: "Adds this device's API keys to the file as plain text. The file is in your vault, so it may sync to other devices and other plugins can read it.",
 					render: (setting) => {
 						this.includeApiKeys = false;
 						setting.addToggle((toggle) =>
@@ -671,38 +645,96 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 	}
 
-	private whenDiarizing(
-		row: SettingDefinitionRender,
-		applies: (diarization: Diarization) => boolean,
-	): SettingDefinitionRender {
+	private providerRow(): SettingDefinitionRender {
 		return {
-			...row,
-			render: (setting, settingGroup) => {
-				const end = row.render(setting, settingGroup);
-				const stop = this.follow(setting, ({ transcript }) => {
-					const off = !applies(transcript.diarization);
-					setting.setDisabled(off || this.settingsInteractionLockCount > 0);
-					// Obsidian dims only disabled action rows.
-					setting.settingEl.setCssStyles({ opacity: off ? "0.5" : "" });
+			name: "Transcription provider",
+			render: (setting) =>
+				void setting.addDropdown((dropdown) => {
+					const { provider: chosen, label } = transcriptionChoice(this.plugin.settings);
+					dropdown.addOptions(PROVIDER_LABELS);
+					// A provider a newer PodNotes stored stays selected, under its stored name.
+					if (chosen === undefined) dropdown.addOption(label, label);
+					dropdown.setValue(chosen ?? label).onChange((provider) => {
+						const { transcript } = this.plugin.settings;
+						transcript.provider = provider;
+						// The model belonged to the provider before.
+						transcript.model = "";
+						this.changed();
+						this.refreshDomState();
+					});
+				}),
+		};
+	}
+
+	private modelRow(): SettingDefinitionRender {
+		return {
+			name: "Model",
+			visible: () => transcriptionChoice(this.plugin.settings).provider !== undefined,
+			render: (setting) => {
+				let stop = () => {};
+				setting.addDropdown((dropdown) => {
+					dropdown.onChange((model) => {
+						this.plugin.settings.transcript.model = model;
+						this.changed();
+					});
+					stop = this.follow(setting, (settings) => {
+						const choice = transcriptionChoice(settings);
+						if (choice.provider === undefined) return;
+						const models = offeredModels(choice.provider);
+						dropdown.selectEl.empty();
+						dropdown.addOption("", `Recommended (${models[0].label})`);
+						for (const { id, label } of models) dropdown.addOption(id, label);
+						// A model a newer PodNotes stored stays selected, under its stored name.
+						if (choice.unknownModel) {
+							dropdown.addOption(choice.unknownModel, choice.unknownModel);
+						}
+						dropdown.setValue(settings.transcript.model);
+					});
 				});
-				return () => {
-					stop();
-					if (typeof end === "function") end();
-				};
+				return stop;
 			},
 		};
 	}
 
-	private secretRow(name: string, key: SecretReferenceKey): SettingDefinitionRender {
+	private speakerLabelsRow(): SettingDefinitionRender {
 		return {
-			name,
+			name: "Speaker labels",
+			render: (setting) => {
+				let stop = () => {};
+				setting.addToggle((toggle) => {
+					toggle.onChange((on) => {
+						const { diarization } = this.plugin.settings.transcript;
+						if (diarization.enabled === on) return;
+						diarization.enabled = on;
+						this.changed();
+						this.refreshDomState();
+					});
+					stop = this.follow(setting, (settings) => {
+						const choice = transcriptionChoice(settings);
+						const unable = choice.provider !== undefined && !choice.model.speakers;
+						toggle.setValue(choice.speakers);
+						setting.setDesc(
+							unable ? `${choice.model.label} does not label speakers.` : "",
+						);
+						// A model without speaker labels still lets labels left on be turned off.
+						setting.setDisabled(
+							(unable && !choice.speakers) || this.settingsInteractionLockCount > 0,
+						);
+					});
+				});
+				return stop;
+			},
+		};
+	}
+
+	private secretRow(kind: CredentialKind): SettingDefinitionRender {
+		const { settingsKey: key, label } = CREDENTIALS[kind];
+		return {
+			name: `${label} API key`,
 			render: (setting) => {
 				const describe = () =>
 					setting.setDesc(
-						this.plugin.credentials.status(
-							this.plugin.settings,
-							CREDENTIAL_KIND_BY_REFERENCE[key],
-						) === "missing"
+						this.plugin.credentials.status(this.plugin.settings, kind) === "missing"
 							? "The selected secret is not available on this device. Select an existing secret or create one."
 							: "",
 					);
@@ -1123,22 +1155,23 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private async saveSecretReference(
-		key: SecretReferenceKey,
+		key: CredentialSettingsKey,
 		selectedId: string | null,
 	): Promise<SecretReferenceSaveResult> {
-		const generation = ++this.credentialSaveGenerations[key];
+		const generation = (this.credentialSaveGenerations.get(key) ?? 0) + 1;
+		this.credentialSaveGenerations.set(key, generation);
 		const operation = this.enqueueSettingsMutation(() =>
 			this.persistSecretReference(key, selectedId),
 		);
 		const result = await operation;
 		return {
 			...result,
-			isLatest: generation === this.credentialSaveGenerations[key],
+			isLatest: generation === this.credentialSaveGenerations.get(key),
 		};
 	}
 
 	private async persistSecretReference(
-		key: SecretReferenceKey,
+		key: CredentialSettingsKey,
 		selectedId: string | null,
 	): Promise<Omit<SecretReferenceSaveResult, "isLatest">> {
 		const previous = this.plugin.settings[key];
@@ -1189,7 +1222,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private async handleSecretSelection(
-		key: SecretReferenceKey,
+		key: CredentialSettingsKey,
 		selectedId: string | null,
 		secret: Pick<SecretComponent, "setValue">,
 		onLatestSettled: () => void,

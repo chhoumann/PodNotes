@@ -689,18 +689,21 @@ interface SettingDefinition {
 	items?: SettingDefinition[];
 	name?: string;
 	desc?: string;
+	visible?: boolean | (() => boolean);
 	render?: (setting: Setting, group: unknown) => void | (() => void);
 }
 
 /**
  * Renders getSettingDefinitions() as Obsidian 1.14 does: every render runs the
  * cleanups of the rows rendered before, and closing the tab runs them before hide().
+ * A row whose `visible` does not hold is rendered and then hidden.
  */
 export class PluginSettingTab {
 	app: App;
 	plugin: Plugin;
 	containerEl: HTMLElement;
 	private cleanups: Array<() => void> = [];
+	private rows: Array<{ row: SettingDefinition; setting: Setting }> = [];
 
 	constructor(app: App, plugin: Plugin) {
 		this.app = app;
@@ -716,6 +719,7 @@ export class PluginSettingTab {
 		const definitions = this.getSettingDefinitions();
 		this.cleanUp();
 		this.containerEl.empty();
+		this.rows = [];
 		for (const definition of definitions) {
 			if (definition.heading)
 				new Setting(this.containerEl).setName(definition.heading).setHeading();
@@ -724,7 +728,16 @@ export class PluginSettingTab {
 				if (row.desc) setting.setDesc(row.desc);
 				const cleanup = row.render?.(setting, definition);
 				if (cleanup) this.cleanups.push(cleanup);
+				this.rows.push({ row, setting });
 			}
+		}
+		this.refreshDomState();
+	}
+
+	refreshDomState(): void {
+		for (const { row, setting } of this.rows) {
+			const { visible = true } = row;
+			setting.settingEl.toggle(typeof visible === "function" ? visible() : visible);
 		}
 	}
 

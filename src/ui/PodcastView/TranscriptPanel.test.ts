@@ -581,7 +581,7 @@ describe("an episode whose feed publishes no transcript", () => {
 		expect(empty).not.toHaveAttribute("role");
 		expect(empty.querySelector("[data-icon]")).toHaveAttribute("data-icon", "captions");
 		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-		const paid = button("Transcribe with OpenAI Paid");
+		const paid = button("Transcribe with ElevenLabs Paid");
 
 		await fireEvent.click(paid);
 		expect(services.transcribeFromAudio).toHaveBeenCalledExactlyOnceWith();
@@ -608,13 +608,8 @@ describe("an episode whose feed publishes no transcript", () => {
 		expect(services.saveTranscriptNote).not.toHaveBeenCalled();
 	});
 
-	test("names Deepgram when diarization uses it", async () => {
-		const { settings } = get(plugin);
-		settings.transcript.diarization = {
-			...settings.transcript.diarization,
-			enabled: true,
-			provider: "deepgram",
-		};
+	test("names the provider the settings choose", async () => {
+		get(plugin).settings.transcript.provider = "deepgram";
 		plugin.update((host) => host);
 		await openTranscript(episodeOf([]), 0);
 

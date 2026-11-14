@@ -8,14 +8,21 @@ import type { PartTranscript, Provider, Word } from "./types";
  * `diarize=true`. Switch once a real key has confirmed the answer keeps its shape.
  */
 export const deepgram: Provider = {
-	label: "Deepgram",
-	models: [{ id: "nova-3", speakers: true, url: true, maxUploadBytes: 2_000_000_000 }],
+	models: [
+		{
+			id: "nova-3",
+			label: "Nova-3",
+			speakers: true,
+			url: true,
+			maxUploadBytes: 2_000_000_000,
+		},
+	],
 	timeoutMs: 30 * 60_000,
 
-	async transcribe({ apiKey, model, audio }, send) {
+	async transcribe({ apiKey, model, speakers, audio }, send) {
 		return parse(
 			await send({
-				url: `https://api.deepgram.com/v1/listen?model=${model.id}&diarize=true&punctuate=true&smart_format=true&utterances=true`,
+				url: `https://api.deepgram.com/v1/listen?model=${model.id}&diarize=${speakers}&punctuate=true&smart_format=true&utterances=true`,
 				headers: { Authorization: `Token ${apiKey}` },
 				body: "url" in audio ? { url: audio.url } : audio.file,
 			}),
