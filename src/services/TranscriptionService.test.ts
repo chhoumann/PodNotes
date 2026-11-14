@@ -2123,6 +2123,20 @@ describe("TranscriptionService", () => {
 		});
 
 		test.each([
+			"https://example.test/v1?api_key=a%2Fb&x=1",
+			"https://example.test/v1/?api_key=a%2Fb&x=1",
+			"https://example.test/v1/audio/transcriptions?api_key=a%2Fb&x=1",
+		])("the address %j keeps its query after the transcriptions path", async (serverUrl) => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+
+			await transcribe(useServer({ serverUrl }));
+
+			expect(providerMock.mock.calls.map(([request]) => request.url)).toEqual([
+				"https://example.test/v1/audio/transcriptions?api_key=a%2Fb&x=1",
+			]);
+		});
+
+		test.each([
 			"http://localhost:8000/v1",
 			"http://127.0.0.1:8080/v1",
 			"http://192.168.1.20:9000/v1",

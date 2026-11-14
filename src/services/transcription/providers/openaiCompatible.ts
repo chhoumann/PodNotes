@@ -1,5 +1,5 @@
 import { isPlainObject } from "src/persistence/codecUtils";
-import { isFetchableUrl } from "src/utility/assertFetchableUrl";
+import { assertFetchableUrl } from "src/utility/assertFetchableUrl";
 import type { Provider } from "./types";
 import { verboseJsonTimes } from "./verboseJson";
 
@@ -16,9 +16,14 @@ export const openaiCompatible: Provider = {
 	timeoutMs: 10 * 60_000,
 
 	endpoint(address) {
-		const base = address.trim().replace(/\/+$/, "");
-		const endpoint = base.endsWith(PATH) ? base : `${base}${PATH}`;
-		return isFetchableUrl(endpoint, { privateHosts: true }) ? endpoint : undefined;
+		try {
+			const url = assertFetchableUrl(address.trim(), { privateHosts: true });
+			const path = url.pathname.replace(/\/+$/, "");
+			url.pathname = path.endsWith(PATH) ? path : `${path}${PATH}`;
+			return url.href;
+		} catch {
+			return undefined;
+		}
 	},
 
 	async transcribe({ apiKey, model, audio, endpoint, textOnly }, send) {
