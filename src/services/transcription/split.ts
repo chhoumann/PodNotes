@@ -74,6 +74,78 @@ export async function splitAudio(
 	return parts;
 }
 
+/** A stretch of audio, in seconds. */
+export interface Span {
+	readonly start: number;
+	readonly end: number;
+}
+
+const REEL_GAP_SECONDS = 1.5;
+
+/**
+ * One MP3 of `clips` of an episode's MP3, in order, with 1.5 s of silence between two, and
+ * where each clip sits in it. A clip starts and ends at the first frame start at or after
+ * its own. Undefined for audio that is not MP3.
+ */
+export function cutReel(
+	audio: { readonly buffer: ArrayBuffer; readonly extension: string },
+	clips: readonly Span[],
+): { file: File; clips: Span[] } | undefined {
+	const bytes = new Uint8Array(audio.buffer);
+	const frames = getMimeType(audio.extension) === "audio/mp3" ? mp3Frames(bytes) : [];
+	if (frames.length === 0) return undefined;
+
+	// Where each frame starts, then where the last one ends.
+	const edges: { offset: number; seconds: number }[] = [];
+	let elapsed = 0;
+	for (const frame of frames) {
+		edges.push({ offset: frame.offset, seconds: elapsed });
+		elapsed += frame.seconds;
+	}
+	const last = frames[frames.length - 1];
+	const end = { offset: last.offset + last.length, seconds: elapsed };
+	edges.push(end);
+	// A frame's start is a sum of frame lengths, so it can fall short of its time by float noise.
+	const edgeAt = (seconds: number) => edges.find((edge) => edge.seconds + 1e-6 >= seconds) ?? end;
+
+	const silence = silentFrames(bytes, frames[Math.floor(frames.length / 2)], REEL_GAP_SECONDS);
+	const pieces: Uint8Array<ArrayBuffer>[] = [];
+	const placed: Span[] = [];
+	let at = 0;
+	for (const clip of clips) {
+		if (placed.length > 0) {
+			pieces.push(silence.bytes);
+			at += silence.seconds;
+		}
+		const from = edgeAt(clip.start);
+		const to = edgeAt(clip.end);
+		pieces.push(bytes.subarray(from.offset, to.offset));
+		placed.push({ start: at, end: at + to.seconds - from.seconds });
+		at += to.seconds - from.seconds;
+	}
+	return { file: new File(pieces, "audio.reel.mp3", { type: "audio/mp3" }), clips: placed };
+}
+
+/**
+ * Frames of silence for at least `seconds`. Each is `frame`'s header with the protection bit
+ * set, so no CRC follows, and the padding bit cleared, then zeros, which a decoder reads as
+ * a frame with nothing to play.
+ */
+function silentFrames(
+	bytes: Uint8Array,
+	frame: Mp3Frame,
+	seconds: number,
+): { bytes: Uint8Array<ArrayBuffer>; seconds: number } {
+	const header = bytes.slice(frame.offset, frame.offset + 4);
+	const length = frame.length - ((header[2] >> 1) & 1);
+	header[1] |= 1;
+	header[2] &= ~2;
+	const count = Math.ceil(seconds / frame.seconds);
+	const silence = new Uint8Array(length * count);
+	for (let index = 0; index < count; index++) silence.set(header, index * length);
+	return { bytes: silence, seconds: count * frame.seconds };
+}
+
 interface Mp3Frame {
 	offset: number;
 	length: number;

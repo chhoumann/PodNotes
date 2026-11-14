@@ -32,9 +32,10 @@ function failedPartMarker(index: number): string {
 export function transcriptFromParts(
 	parts: readonly TranscribedPart[],
 	speakers: boolean,
+	sameSpeaker: SameSpeaker = new Map(),
 ): ParsedTranscript | undefined {
 	if (!parts.some(({ transcript }) => transcript && textOf(transcript).trim())) return undefined;
-	if (isTimed(parts)) return timed(cuesOf(parts, speakers));
+	if (isTimed(parts)) return timed(cuesOf(parts, speakers, sameSpeaker));
 	const text = parts.map(({ transcript }, index) =>
 		transcript ? textOf(transcript) : failedPartMarker(index),
 	);
@@ -59,12 +60,26 @@ function toMilliseconds(seconds: number): number {
 	return Math.round(seconds * 1000) / 1000;
 }
 
-/** Speakers are numbered in the order they first speak. A provider's label names a speaker only within its own part. */
-function cuesOf(parts: readonly TimedPart[], speakers: boolean): TranscriptCue[] {
+/** Names a speaker label of one part. A provider's label names a speaker only within its own part. */
+export function speakerKey(part: number, label: string): string {
+	return `${part}:${label}`;
+}
+
+/** Speaker keys of labels heard as one person, each mapped to the key that stands for them all. */
+export type SameSpeaker = ReadonlyMap<string, string>;
+
+/** Speakers are numbered in the order they first speak. */
+function cuesOf(
+	parts: readonly TimedPart[],
+	speakers: boolean,
+	sameSpeaker: SameSpeaker,
+): TranscriptCue[] {
 	const numbers = new Map<string, string>();
-	const numberOf = (label: string) => {
-		const number = numbers.get(label) ?? `${numbers.size + 1}`;
-		numbers.set(label, number);
+	const numberOf = (part: number, label: string) => {
+		const key = speakerKey(part, label);
+		const speaker = sameSpeaker.get(key) ?? key;
+		const number = numbers.get(speaker) ?? `${numbers.size + 1}`;
+		numbers.set(speaker, number);
 		return number;
 	};
 	return parts.flatMap(({ start, transcript }, index): TranscriptCue[] =>
@@ -74,7 +89,7 @@ function cuesOf(parts: readonly TimedPart[], speakers: boolean): TranscriptCue[]
 					end: toMilliseconds(start + word.end),
 					speaker:
 						speakers && word.speaker !== undefined
-							? numberOf(`${index}:${word.speaker}`)
+							? numberOf(index, word.speaker)
 							: undefined,
 					text: word.text,
 				}))
