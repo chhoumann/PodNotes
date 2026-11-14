@@ -101,8 +101,13 @@ function mp3PartStarts(
 	maxBytes: number,
 	maxSeconds: number,
 ): { offset: number; seconds: number }[] {
-	const total = frames.reduce((seconds, frame) => seconds + frame.seconds, 0);
-	const parts = Math.max(Math.ceil(byteLength / maxBytes), Math.ceil(total / maxSeconds));
+	// Frames in one stream last equally long, so counting frames keeps every part under
+	// maxSeconds without a one-frame tail from rounding.
+	const framesPerCap = frames.length > 0 ? Math.floor(maxSeconds / frames[0].seconds) : Infinity;
+	const parts = Math.max(
+		Math.ceil(byteLength / maxBytes),
+		Math.ceil(frames.length / framesPerCap),
+	);
 	const framesPerPart = Math.ceil(frames.length / parts);
 	const starts = [{ offset: 0, seconds: 0 }];
 	let elapsed = 0;
@@ -126,8 +131,9 @@ function mp3PartStarts(
 }
 
 /**
- * The Layer III frames in `bytes`. A frame counts only when another frame or the
- * end of the buffer follows it, so sync-like bytes in a tag or cover art don't.
+ * The Layer III frames in `bytes`. A frame counts when it continues the frames before it,
+ * or when another frame or the end of the buffer follows it, so sync-like bytes in a tag
+ * or cover art don't, and the last frame before trailing metadata does.
  */
 function mp3Frames(bytes: Uint8Array): Mp3Frame[] {
 	const frames: Mp3Frame[] = [];
@@ -135,7 +141,9 @@ function mp3Frames(bytes: Uint8Array): Mp3Frame[] {
 	while (offset + 4 <= bytes.length) {
 		const frame = mp3FrameAt(bytes, offset);
 		const next = frame ? offset + frame.length : 0;
-		if (frame && (next === bytes.length || mp3FrameAt(bytes, next))) {
+		const last = frames[frames.length - 1];
+		const continues = last !== undefined && last.offset + last.length === offset;
+		if (frame && (continues || next === bytes.length || mp3FrameAt(bytes, next))) {
 			frames.push(frame);
 			offset = next;
 		} else {

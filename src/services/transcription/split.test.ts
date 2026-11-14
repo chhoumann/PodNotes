@@ -108,6 +108,37 @@ describe("an MP3 over a cap", () => {
 		expect(parts[1].start).toBeCloseTo(18_000 * stream.frameSeconds, 6);
 		expect(joinsInto(parts, episode)).toBe(true);
 	});
+
+	test("an MP3 a frame over a whole number of capped parts is cut into equal parts, not a one-frame tail", async () => {
+		const stream = MP3_STREAMS.mpeg25At8Kbps;
+		// 1,400 s holds 19,444 frames of 72 ms, so 58,333 frames need 4 parts.
+		const episode = mp3Bytes(stream, 58_333);
+
+		const parts = await split(episode, { maxBytes: 20 * MIB, maxSeconds: 1400 });
+
+		expect(parts.map((part) => part.bytes.length / stream.frameBytes)).toEqual([
+			14_584, 14_584, 14_584, 14_581,
+		]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("counts the last frame before trailing metadata, so the last part stays under maxSeconds", async () => {
+		const stream = MP3_STREAMS.mpeg25At8Kbps;
+		// An ID3v1 tag after the last frame. A 72.01 s part holds 1,000 frames, so 2,001 need three parts.
+		const tag = new Uint8Array(128);
+		tag.set([0x54, 0x41, 0x47]);
+		const episode = Buffer.concat([mp3Bytes(stream, 2001), tag]);
+
+		const parts = await split(episode, { maxBytes: 20 * MIB, maxSeconds: 72.01 });
+
+		const frames = parts.map(
+			(part, index) =>
+				(part.bytes.length - (index === parts.length - 1 ? tag.length : 0)) /
+				stream.frameBytes,
+		);
+		expect(frames).toEqual([667, 667, 667]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
 });
 
 describe("audio over the size cap that cannot be cut where it is", () => {
