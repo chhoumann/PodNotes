@@ -72,6 +72,7 @@ export function createMockPlugin(
 		openAIKey?: string;
 		deepgramKey?: string;
 		elevenLabsKey?: string;
+		openRouterKey?: string;
 		/** The stored provider ID. OpenAI when left out. */
 		provider?: string;
 		/** The stored model ID. The recommended model when left out. */
@@ -91,6 +92,7 @@ export function createMockPlugin(
 		openAIKey = "test-api-key",
 		deepgramKey = "",
 		elevenLabsKey = "",
+		openRouterKey = "",
 		provider = "openai",
 		model = "",
 		speakers = false,
@@ -108,6 +110,7 @@ export function createMockPlugin(
 		openai: openAIKey,
 		deepgram: deepgramKey,
 		elevenlabs: elevenLabsKey,
+		openrouter: openRouterKey,
 	};
 
 	return {
@@ -115,6 +118,7 @@ export function createMockPlugin(
 			openAISecretId: openAIKey ? "openai-secret" : "",
 			deepgramSecretId: "",
 			elevenLabsSecretId: "",
+			openRouterSecretId: "",
 			timestamp: { template: "- {{linktime}} ", offset: 5 },
 			transcript: {
 				path: "Transcripts/{{podcast}}/{{title}}.md",

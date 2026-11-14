@@ -4,6 +4,7 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { deepgram } from "./providers/deepgram";
 import { elevenlabs } from "./providers/elevenlabs";
 import { openai } from "./providers/openai";
+import { openrouter } from "./providers/openrouter";
 import type { ModelProfile, Provider } from "./providers/types";
 
 /**
@@ -13,6 +14,7 @@ import type { ModelProfile, Provider } from "./providers/types";
 export const PROVIDERS = {
 	elevenlabs,
 	deepgram,
+	openrouter,
 	openai,
 } satisfies Record<CredentialKind, Provider>;
 

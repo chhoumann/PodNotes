@@ -622,6 +622,7 @@ describe("PodNotes data schema", () => {
 			headsetNextTrack: "skipForward",
 			libraryId: "",
 			elevenLabsSecretId: "",
+			openRouterSecretId: "",
 			transcript: { ...rest.transcript, provider: "elevenlabs", model: "" },
 		});
 	});
@@ -648,8 +649,8 @@ describe("PodNotes data schema", () => {
 				JSON.stringify(encodePodNotesData(decoded.settings, decoded.unknownFields)),
 			);
 		};
-		/** The root field this version adds to a 2.24.0 library when it saves. */
-		const ADDED = { elevenLabsSecretId: "" };
+		/** The root fields this version adds to a 2.24.0 library when it saves. */
+		const ADDED = { elevenLabsSecretId: "", openRouterSecretId: "" };
 
 		it.each([
 			[
@@ -731,7 +732,7 @@ describe("PodNotes data schema", () => {
 			],
 			["no key", structuredClone(released2240)],
 		])(
-			"a save of a library with %s adds the provider, the model and an empty ElevenLabs key reference, and changes nothing else",
+			"a save of a library with %s adds the provider, the model and empty ElevenLabs and OpenRouter key references, and changes nothing else",
 			(_state, data) => {
 				const decoded = decodePodNotesData(structuredClone(data));
 				const { provider, model } = decoded.settings.transcript;

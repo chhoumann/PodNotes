@@ -486,7 +486,7 @@ describe("TranscriptionService", () => {
 				await vi.advanceTimersByTimeAsync(60 * 60_000);
 
 				expect(String(setMessage.mock.calls.at(-1)?.[0])).toMatch(
-					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: ElevenLabs, Deepgram\.$/,
+					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: ElevenLabs, Deepgram, OpenRouter\.$/,
 				);
 				expect(hide).not.toHaveBeenCalled();
 				expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
@@ -1220,7 +1220,248 @@ describe("TranscriptionService", () => {
 			},
 		);
 	});
+
+	describe("an OpenRouter transcript", () => {
+		const TRANSCRIPTIONS = "https://openrouter.ai/api/v1/audio/transcriptions";
+		const CATALOG = "https://openrouter.ai/api/v1/models?output_modalities=transcription";
+		const audio = new Uint8Array(2048).map((_, index) => (index * 13) % 241);
+		const useOpenRouter = (
+			overrides: { model?: string; speakers?: boolean; feeds?: FeedRepository } = {},
+		) => {
+			getEpisodeAudioBufferMock.mockResolvedValue({ buffer: audio.buffer, extension: "mp3" });
+			return createMockPlugin({
+				provider: "openrouter",
+				openRouterKey: "openrouter-key",
+				speakers: true,
+				...overrides,
+			});
+		};
+		/** A word as OpenRouter's verbose_json lists it, with a speaker when one is given. */
+		const word = (text: string, start: number, end: number, speaker?: number) => ({
+			word: text,
+			start,
+			end,
+			confidence: 0.99,
+			...(speaker !== undefined && { speaker, speaker_label: `speaker_${speaker}` }),
+		});
+		const answers = {
+			text: "Hello there. [laughter] Hi!",
+			duration: 11,
+			words: [
+				word("Hello", 1.2, 1.5, 0),
+				word("there.", 1.5, 1.9, 0),
+				{ ...word("[laughter]", 2, 3, 0), type: "audio_event" },
+				word("Hi!", 10.16, 10.5, 1),
+			],
+		};
+		/** OpenRouter's public catalog, listing each model with its end date or null. */
+		const catalog = (models: Record<string, string | null>) => ({
+			data: Object.entries(models).map(([id, expiration_date]) => ({
+				id,
+				name: id,
+				expiration_date,
+				endpoints: ["/api/v1/audio/transcriptions"],
+			})),
+		});
+		const EVERY_MODEL = catalog({
+			"x-ai/grok-stt-2.0": null,
+			"x-ai/grok-stt-1.0": "2026-11-15",
+			"elevenlabs/scribe-v2": null,
+			"microsoft/mai-transcribe-2": null,
+		});
+		/** Answers the catalog with `listed`, and each transcription request with `answer`. */
+		const openRouter = (
+			answer: (request: RequestUrlParam) => Response = () => Response.json(answers),
+			listed: unknown = EVERY_MODEL,
+		) =>
+			providerMock.mockImplementation(async (request) =>
+				request.url === CATALOG ? Response.json(listed) : answer(request),
+			);
+		/** The transcription requests the jobs sent, oldest first. */
+		const sent = () =>
+			providerMock.mock.calls
+				.map(([request]) => request)
+				.filter(({ url }) => url === TRANSCRIPTIONS);
+		const sentJson = (request: RequestUrlParam) =>
+			JSON.parse(new TextDecoder().decode(sentBytes(request)));
+		const fields = async (request: RequestUrlParam) =>
+			Object.fromEntries(
+				[...(await sentForm(request))].filter(([, value]) => typeof value === "string"),
+			);
+		const link = (time: string) =>
+			`obsidian://podnotes?episodeName=Test%20Episode&url=https%3A%2F%2Fexample.com%2Ffeed.xml&time=${time}`;
+		const labeled = `# Test Episode\n\n[00:00:01](${link("1.2")}) **1:** Hello there.\n\n[00:00:10](${link("10.16")}) **2:** Hi!`;
+		const unlabeled = `# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there.\n\n[00:00:10](${link("10.16")}) Hi!`;
+
+		test("Grok STT 2.0, the recommended model, gets even a public episode as base64 JSON, routed to xAI and asked there for speaker labels", async () => {
+			openRouter();
+			const plugin = useOpenRouter({ feeds: savedFeedRepository(publicFeed, [mockEpisode]) });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce();
+			expect(sent()).toHaveLength(1);
+			const [request] = sent();
+			expect(request.method).toBe("POST");
+			expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+			expect(request.contentType).toBe("application/json");
+			expect(sentJson(request)).toEqual({
+				model: "x-ai/grok-stt-2.0",
+				input_audio: { data: Buffer.from(audio).toString("base64"), format: "mp3" },
+				response_format: "verbose_json",
+				timestamp_granularities: ["word", "segment"],
+				provider: { only: ["xai"], options: { xai: { diarize: true } } },
+			});
+			expect(savedNote(plugin)).toBe(labeled);
+		});
+
+		test.each(["elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"])(
+			"%s gets an upload as multipart, asked for speaker labels beside the model",
+			async (model) => {
+				openRouter();
+				const plugin = useOpenRouter({ model });
+
+				await transcribe(plugin);
+
+				expect(sent()).toHaveLength(1);
+				const [request] = sent();
+				expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+				expect(await fields(request)).toEqual({
+					model,
+					response_format: "verbose_json",
+					diarize: "true",
+				});
+				expect(new Uint8Array(await (await sentFile(request)).arrayBuffer())).toEqual(
+					audio,
+				);
+				expect(savedNote(plugin)).toBe(labeled);
+			},
+		);
+
+		test.each(["x-ai/grok-stt-2.0", "elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"])(
+			"with speaker labels off, %s is asked for none, and the note names no speaker",
+			async (model) => {
+				openRouter();
+				const plugin = useOpenRouter({ model, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(sent()).toHaveLength(1);
+				expect(sentText(sent()[0])).not.toContain("diarize");
+				expect(savedNote(plugin)).toBe(unlabeled);
+			},
+		);
+
+		test("Scribe v2 takes a public episode by its address in one request, and its audio is never loaded", async () => {
+			openRouter();
+			const plugin = useOpenRouter({
+				model: "elevenlabs/scribe-v2",
+				feeds: savedFeedRepository(publicFeed, [mockEpisode]),
+			});
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(sent()).toHaveLength(1);
+			const [request] = sent();
+			expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+			expect(request.contentType).toBe("application/json");
+			expect(sentJson(request)).toEqual({
+				model: "elevenlabs/scribe-v2",
+				input_audio: { url: "https://example.com/episode.mp3", format: "mp3" },
+				response_format: "verbose_json",
+				diarize: true,
+			});
+			expect(savedNote(plugin)).toBe(labeled);
+		});
+
+		test("a 40 MB episode goes in parts of at most 18 MB and 1,800 s, one at a time, timed from the episode's start", async () => {
+			const stream = MP3_STREAMS.mpeg1At96Kbps;
+			const frames = Math.ceil(40_000_000 / stream.frameBytes);
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: mp3Bytes(stream, frames).buffer,
+				extension: "mp3",
+			});
+			const partBytes: number[] = [];
+			openRouter((request) => {
+				partBytes.push(
+					Buffer.from(sentJson(request).input_audio.data, "base64").byteLength,
+				);
+				return Response.json({ words: [word(`Part ${partBytes.length}.`, 1, 1.5)] });
+			});
+			const plugin = createMockPlugin({
+				provider: "openrouter",
+				openRouterKey: "openrouter-key",
+			});
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(partBytes.length).toBeGreaterThan(2);
+			expect(partBytes.reduce((sum, bytes) => sum + bytes)).toBe(frames * stream.frameBytes);
+			for (const bytes of partBytes) {
+				expect(bytes).toBeLessThanOrEqual(18_000_000);
+				expect(mp3Seconds(stream, bytes)).toBeLessThanOrEqual(1800);
+			}
+			// Each part's word is 1 s into it.
+			const expected = partBytes.map(
+				(_, index) => mp3Seconds(stream, sumOf(partBytes.slice(0, index))) + 1,
+			);
+			const note = savedNote(plugin);
+			const times = [...note.matchAll(/time=([\d.]+)\)/g)].map(([, time]) => Number(time));
+			expect(times).toHaveLength(expected.length);
+			times.forEach((time, index) => expect(time).toBeCloseTo(expected[index], 2));
+			expect(note).toContain(`Part ${partBytes.length}.`);
+		});
+
+		test.each<[name: string, status: number, message: string, shown: string]>([
+			[
+				"402",
+				402,
+				"Insufficient credits. Add more using https://openrouter.ai/settings/credits SENTINEL",
+				"Your OpenRouter account is out of credit. Add credit there, then try again.",
+			],
+			[
+				"404 for a model no route of which meets the account's privacy settings",
+				404,
+				"No endpoints found matching your data policy (Zero data retention). Configure: https://openrouter.ai/settings/privacy SENTINEL",
+				"OpenRouter does not offer the x-ai/grok-stt-2.0 model under your OpenRouter privacy settings. Change them there, or choose another model in the transcript settings.",
+			],
+			[
+				"404",
+				404,
+				"No endpoints found for x-ai/grok-stt-2.0. SENTINEL",
+				"OpenRouter does not offer the x-ai/grok-stt-2.0 model to this API key.",
+			],
+			[
+				"401",
+				401,
+				"No cookie auth credentials found SENTINEL",
+				"OpenRouter rejected the API key. Check it in the transcript settings.",
+			],
+		])(
+			"a %s is said in PodNotes' words, with none of OpenRouter's, and no other part is sent",
+			async (_name, status, message, shown) => {
+				getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
+				openRouter(() => Response.json({ error: { message, code: status } }, { status }));
+				const plugin = createMockPlugin({
+					provider: "openrouter",
+					openRouterKey: "openrouter-key",
+				});
+
+				await expect(finalNotice(plugin)).resolves.toBe(`Transcription failed: ${shown}`);
+
+				expect(sent()).toHaveLength(1);
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			},
+		);
+	});
 });
+
+function sumOf(numbers: readonly number[]): number {
+	return numbers.reduce((sum, number) => sum + number, 0);
+}
 
 function deepgramAnswer(words: Record<string, unknown>[]) {
 	return { results: { channels: [{ alternatives: [{ words }] }] } };

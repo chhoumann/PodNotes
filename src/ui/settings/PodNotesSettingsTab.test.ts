@@ -186,6 +186,7 @@ describe("sections", () => {
 					"OpenAI API key",
 					"Deepgram API key",
 					"ElevenLabs API key",
+					"OpenRouter API key",
 					"Model",
 					"Speaker labels",
 					"Speaker label format",
@@ -326,6 +327,7 @@ describe("Transcripts", () => {
 		expect(options(provider())).toEqual([
 			["elevenlabs", "ElevenLabs"],
 			["deepgram", "Deepgram"],
+			["openrouter", "OpenRouter"],
 			["openai", "OpenAI"],
 		]);
 		expect(provider()).toHaveDisplayValue("OpenAI");
@@ -431,6 +433,25 @@ describe("Transcripts", () => {
 		]);
 		expect(model()).toHaveDisplayValue("nova-9");
 		expect(await writes()).toBe(0);
+	});
+
+	describe("OpenRouter", () => {
+		test("choosing it shows its API key row and its three models, Grok STT 2.0 recommended", async () => {
+			const { provider, model, keyButtons, disk } = openTranscripts();
+
+			choose(provider(), "openrouter");
+
+			expect(keyButtons()).toEqual(["Link... OpenRouter API key"]);
+			await settled();
+			expect(options(model())).toEqual([
+				["", "Recommended (Grok STT 2.0)"],
+				["x-ai/grok-stt-2.0", "Grok STT 2.0"],
+				["elevenlabs/scribe-v2", "ElevenLabs Scribe v2"],
+				["microsoft/mai-transcribe-2", "MAI-Transcribe 2"],
+			]);
+			expect(model()).toHaveDisplayValue("Recommended (Grok STT 2.0)");
+			expect((await disk()).transcript).toMatchObject({ provider: "openrouter", model: "" });
+		});
 	});
 });
 

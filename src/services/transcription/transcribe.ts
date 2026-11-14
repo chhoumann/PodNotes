@@ -30,6 +30,7 @@ const ENDS_THE_JOB: ReadonlySet<FailureKind> = new Set([
 	"auth",
 	"credits",
 	"model-unavailable",
+	"privacy",
 	"rejected",
 ]);
 
