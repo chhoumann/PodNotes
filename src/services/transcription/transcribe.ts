@@ -3,10 +3,11 @@ import type { FeedRepository } from "src/services/FeedRepository";
 import type { ParsedTranscript } from "src/services/publishedTranscript/parse";
 import type { Episode } from "src/types/Episode";
 import { publicAudioUrl } from "./audioSource";
-import { type TranscribedPart, transcriptFromParts } from "./cues";
+import { type SameSpeaker, speakerKey, type TranscribedPart, transcriptFromParts } from "./cues";
 import { createSender, failure, type FailureKind, TranscriptionError } from "./http";
 import type { AudioInput } from "./providers/types";
 import { PROVIDERS, type ProviderChoice, providersWithSpeakers } from "./registry";
+import { speakerReel } from "./speakers";
 import { splitAudio } from "./split";
 
 export interface TranscriptionJob {
@@ -51,6 +52,7 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 
 	const parts: TranscribedPart[] = [];
 	let lastFailure: TranscriptionError | undefined;
+	let sameSpeaker: SameSpeaker | undefined;
 
 	const url = model.url ? await publicAudioUrl(episode, job.feeds) : undefined;
 	if (url) {
@@ -89,9 +91,23 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 				parts.push({ start });
 			}
 		}
+
+		const reel =
+			speakers && model.mergeSpeakers && files.length > 1
+				? speakerReel(parts, audio)
+				: undefined;
+		if (reel) {
+			onProgress(`${progress} matching speakers across parts`);
+			try {
+				sameSpeaker = reel.match(await transcribeOne({ file: reel.file }));
+			} catch (error) {
+				// The parts' labels stay apart, and the warning below says so.
+				if (!(error instanceof TranscriptionError)) throw error;
+			}
+		}
 	}
 
-	const content = transcriptFromParts(parts, speakers);
+	const content = transcriptFromParts(parts, speakers, sameSpeaker);
 	if (!content) throw lastFailure ?? failure("empty", context);
 
 	const warnings: string[] = [];
@@ -116,17 +132,21 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 			`Saved without speaker labels, because ${choice.label} does not label speakers. These providers do: ${providersWithSpeakers().join(", ")}.`,
 		);
 	}
-	// A request routed where the speaker option is ignored is answered without speakers.
-	const labeled = parts.some(
-		({ transcript }) =>
-			transcript &&
-			"words" in transcript &&
-			transcript.words.some((word) => word.speaker !== undefined),
+	const labels = new Set(
+		parts.flatMap(({ transcript }, part) =>
+			transcript && "words" in transcript
+				? transcript.words.flatMap(({ speaker }) =>
+						speaker === undefined ? [] : [speakerKey(part, speaker)],
+					)
+				: [],
+		),
 	);
-	if (speakers && !labeled) {
+	// A request routed where the speaker option is ignored is answered without speakers.
+	if (speakers && labels.size === 0) {
 		warnings.push(`Saved without speaker labels, because ${model.label} returned none.`);
 	}
-	if (speakers && labeled && parts.length > 1) {
+	// A label the reel did not hear can name a voice that another part labels too.
+	if (speakers && parts.length > 1 && [...labels].some((label) => !sameSpeaker?.has(label))) {
 		warnings.push(
 			`${choice.label} transcribed this episode in ${parts.length} parts, and speaker labels restart in each, so one person can have several labels.`,
 		);
