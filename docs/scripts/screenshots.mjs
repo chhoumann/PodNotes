@@ -42,9 +42,6 @@ import { jsLiteral } from "../../scripts/js-literal.mjs";
 
 const outDir = fileURLToPath(new URL("../public/screenshots", import.meta.url));
 const work = path.join(root, ".obsidian-e2e-artifacts", "docs-screenshots");
-const FIXTURES = fileURLToPath(
-	new URL("../../.claude/skills/verify/fixtures.mjs", import.meta.url),
-);
 const NET = fileURLToPath(new URL("../../.claude/skills/verify/net.mjs", import.meta.url));
 const THEMES = /** @type {const} */ (["light", "dark"]);
 const HERO = { width: 1440, height: 900, sidebar: 360 };
@@ -316,6 +313,8 @@ const DRAWER_PLAYER = `() => {
 const HIDE_ID_PROPERTIES =
 	'.metadata-property:is([data-property-key="guid" i], [data-property-key="feedurl" i]) { display: none; }';
 const SETTINGS_CAPTURE_CSS = `${LINUX_SECRET_WARNING_CSS} body:not(.is-mobile) .modal.mod-settings { height: 92vh !important; max-height: 92vh !important; } .modal-close-button, .modal-header-button, .modal.mod-settings .modal-header { visibility: hidden !important; }`;
+/** The example address and model the setup guide shows. The settings shots never contact them. */
+const EXAMPLE_SERVER_URL = "http://localhost:8000/v1";
 const EXAMPLE_SERVER_MODEL = "whisper-large-v3-turbo";
 
 /**
@@ -797,10 +796,6 @@ async function main() {
 	}
 
 	// Transcript settings, OpenRouter's model menu, OpenAI-compatible server, and a saved transcript note.
-	const fixtureServer = execFileSync(process.execPath, [FIXTURES, "server"], {
-		encoding: "utf8",
-	}).trim();
-	const localServerUrl = `http://localhost:${new URL(fixtureServer).port}/v1`;
 	const watchNet = () =>
 		execFileSync(
 			process.execPath,
@@ -811,7 +806,7 @@ async function main() {
 	await desktop(SETTINGS_WINDOW);
 	await openTranscriptSettings("elevenlabs");
 	await capture("transcript-settings", TRANSCRIPT_SETTINGS, { css: SETTINGS_CAPTURE_CSS });
-	await openTranscriptSettings("openai-compatible", localServerUrl);
+	await openTranscriptSettings("openai-compatible", EXAMPLE_SERVER_URL);
 	await capture("openai-compatible-settings", TRANSCRIPT_SETTINGS, { css: SETTINGS_CAPTURE_CSS });
 	await captureOpenSelect("openrouter-models", "Model", OPENROUTER_MODELS);
 	await evaluate(`app.setting.close(); return true;`);
@@ -851,7 +846,7 @@ async function main() {
 	await capture("openrouter-models-phone", OPENROUTER_MODELS_PHONE, {
 		css: SETTINGS_CAPTURE_CSS,
 	});
-	await openTranscriptSettings("openai-compatible", localServerUrl);
+	await openTranscriptSettings("openai-compatible", EXAMPLE_SERVER_URL);
 	await capture("openai-compatible-settings-phone", TRANSCRIPT_SETTINGS, {
 		css: SETTINGS_CAPTURE_CSS,
 	});

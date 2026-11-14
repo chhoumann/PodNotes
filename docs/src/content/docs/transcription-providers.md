@@ -75,8 +75,8 @@ A provider fetches an episode URL directly only when you added the podcast to Po
 | **Grok STT 2.0** (recommended) | Yes (`1`, `2`, `3`) | Word and segment | Splits uploads past 18 MB (or 30 min for MP3), and matches MP3 voices across parts | Default OpenRouter model |
 | **ElevenLabs Scribe v2** | Yes (`1`, `2`, `3`) | Word | Fetches public episode URLs in one request. Uploads split past 18 MB (or 30 min for MP3), and speaker numbers restart per part. | No device upload on public feeds |
 | **MAI-Transcribe 2** | Yes (`1`, `2`, `3`) | Word | Splits uploads past 18 MB (or 30 min for MP3), and speaker numbers restart per part | Speaker-labeled alternative |
-| **Voxtral Mini Transcribe 3** | No | Segment | Splits uploads past 12 MB (or 15 min for MP3) | Lowest measured mean word error on OpenRouter (4.55%) |
-| **Qwen3 ASR 1.7B** | No | Word (PodNotes restores punctuation from the response text) | Splits uploads past 12 MB (or 15 min for MP3) | Cheapest on OpenRouter, about $0.03 per hour of audio |
+| **Voxtral Mini Transcribe 3** | No | Segment | Splits uploads past 12 MB (or 15 min for MP3) | Plain transcript, timed by passage |
+| **Qwen3 ASR 1.7B** | No | Word (PodNotes restores punctuation from the response text) | Splits uploads past 12 MB (or 15 min for MP3) | Plain transcript at a low rate, see [model rates](https://openrouter.ai/models?output_modalities=transcription) |
 
 PodNotes checks OpenRouter's public transcription catalog at most once a day when you open settings or start a transcription, without sending your key:
 

@@ -112,8 +112,8 @@ PodNotes does not import transcripts from Apple Podcasts. See [What transcriptio
 ### Which provider should I use?
 
 Start with **ElevenLabs**. It is the default on new installs, labels speakers, adds timestamps, and fetches public episodes up to 15 hours itself so your device uploads nothing.
-Use **OpenRouter** to run speech transcription on the same OpenRouter key and balance as your other AI tools: **Grok STT 2.0** (recommended), **ElevenLabs Scribe v2**, and **MAI-Transcribe 2** label speakers, **Voxtral Mini Transcribe 3** has the lowest measured mean word error on OpenRouter (4.55%), and **Qwen3 ASR 1.7B** costs about $0.03 per hour.
-Use **Deepgram** if speed comes first, **OpenAI-compatible server** to keep audio on your machine with a local server or connect a hosted `/v1/audio/transcriptions` endpoint, or **OpenAI** if you already have an OpenAI key and do not need timestamps or speaker labels. See [Choose a transcription provider](/transcription-providers/).
+Use **OpenRouter** to run speech transcription on the same OpenRouter key and balance as your other AI tools: **Grok STT 2.0** (recommended), **ElevenLabs Scribe v2**, and **MAI-Transcribe 2** label speakers, and **Voxtral Mini Transcribe 3** and **Qwen3 ASR 1.7B** write plain transcripts without speaker labels.
+Use **Deepgram** if you already have a Deepgram key, **OpenAI-compatible server** to keep audio on your machine with a local server or connect a hosted `/v1/audio/transcriptions` endpoint, or **OpenAI** if you already have an OpenAI key and do not need timestamps or speaker labels. See [Choose a transcription provider](/transcription-providers/).
 
 ### Why does my transcript have no speaker labels?
 
