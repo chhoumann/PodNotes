@@ -226,15 +226,15 @@ function mp3Frames(bytes: Uint8Array): Mp3Frame[] {
 	// Where the last frame or tag ended, where the next tag may start.
 	let boundary = 0;
 	while (offset + 4 <= bytes.length) {
-		// An ID3v2 tag: "ID3", version, flags, then its size after the 10-byte header in 7
-		// bits per byte.
+		// An ID3v2 tag: "ID3", version, flags, then its size in 7 bits per byte, which leaves
+		// out the 10-byte header and the 10-byte footer that flag 0x10 adds.
 		const isTag =
 			bytes[offset] === 0x49 && bytes[offset + 1] === 0x44 && bytes[offset + 2] === 0x33;
 		if (isTag && offset === boundary) {
 			let size = 0;
 			for (let index = offset + 6; index < offset + 10; index++)
 				size = (size << 7) | (bytes[index] & 0x7f);
-			offset = boundary = offset + 10 + size;
+			offset = boundary = offset + 10 + size + (bytes[offset + 5] & 0x10 ? 10 : 0);
 			continue;
 		}
 		const frame = mp3FrameAt(bytes, offset);
