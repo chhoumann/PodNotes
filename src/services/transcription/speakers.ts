@@ -70,7 +70,8 @@ export function speakerReel(
 	return {
 		file: reel.file,
 		match(answer) {
-			const heard = "words" in answer ? turnsOf(answer.words) : [];
+			// Words and not turns, because one speaker's turn can span a clip the model gave no words.
+			const heard = "words" in answer ? answer.words : [];
 			const standsFor = new Map<string, string>();
 			const same = new Map<string, string>();
 			reel.clips.forEach((clip, index) => {

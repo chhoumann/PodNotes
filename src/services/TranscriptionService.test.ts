@@ -1559,11 +1559,11 @@ describe("TranscriptionService", () => {
 				return { words };
 			};
 			/** OpenRouter answering each request as `heard` does, and the reel with `reel` when given. */
-			const hearing = (reel?: () => Response) =>
+			const hearing = (reel?: (frames: readonly Frame[]) => Response) =>
 				openRouter(async (request) => {
 					const frames = framesOf(await sentAudio(request));
 					const isReel = frames.length * stream.frameSeconds < 60;
-					return isReel && reel ? reel() : Response.json(heard(frames));
+					return isReel && reel ? reel(frames) : Response.json(heard(frames));
 				});
 			const spoken = (note: string) =>
 				[...note.matchAll(/\*\*(\d+):\*\* (\w+)/g)].map(([, n, text]) => `${n} ${text}`);
@@ -1651,6 +1651,32 @@ describe("TranscriptionService", () => {
 					frame === "silence" ? 0 : frame.voice,
 				);
 				expect(new Set(reelVoices)).toEqual(new Set([0, ANN, BOB]));
+			});
+
+			test("a clip the reel answer gives no words keeps its own number, though one speaker talks in the clips on both sides of it", async () => {
+				// Clips go most talk first: Ann in the first part, Cy, then Ann in the second.
+				getEpisodeAudioBufferMock.mockResolvedValue(
+					episode([
+						{ voice: ANN, from: 0, to: 417 },
+						{ voice: CY, from: 22_500, to: 22_778 },
+						{ voice: ANN, from: 22_778, to: 22_917 },
+					]),
+				);
+				hearing((frames) =>
+					Response.json(
+						heard(
+							frames.map((frame) =>
+								frame !== "silence" && frame.voice === CY ? "silence" : frame,
+							),
+						),
+					),
+				);
+				const plugin = grok();
+
+				await transcribe(plugin);
+
+				expect(sent()).toHaveLength(3);
+				expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Cy", "1 Ann"]);
 			});
 
 			test("a reel OpenRouter refuses keeps the parts' labels, saves the note and says labels restart", async () => {
