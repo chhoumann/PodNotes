@@ -155,6 +155,34 @@ describe("requestWithTimeout target gate and forwarding", () => {
 		expect(request).not.toHaveBeenCalled();
 	});
 
+	it("reaches this device or a private network only when asked, under every other rule", async () => {
+		const request = implementation();
+		const local = "http://127.0.0.1:8000/v1/audio/transcriptions";
+
+		expectRedactedError(
+			await rejectionOf(requestWithTimeout(local, { request })),
+			"unsafe-target",
+		);
+		expect(request).not.toHaveBeenCalled();
+
+		await requestWithTimeout(local, { request, privateHosts: true });
+		await requestWithTimeout("http://localhost/v1", { request, privateHosts: true });
+		expect(request.mock.calls.map(([{ url }]) => url)).toEqual([local, "http://localhost/v1"]);
+
+		for (const target of [
+			"ftp://127.0.0.1/v1",
+			" http://localhost/v1",
+			"http://localhost/v1#part",
+			"http:localhost/v1",
+		]) {
+			expectRedactedError(
+				await rejectionOf(requestWithTimeout(target, { request, privateHosts: true })),
+				"unsafe-target",
+			);
+		}
+		expect(request).toHaveBeenCalledTimes(2);
+	});
+
 	it("supports an injected request implementation without weakening policy", async () => {
 		const request = implementation(Promise.resolve(makeResponse({ bytes: 2 })));
 
@@ -182,6 +210,7 @@ describe("requestWithTimeout option and body bounds", () => {
 		{ acceptedStatuses: [600] },
 		{ signal: {} },
 		{ request: {} },
+		{ privateHosts: "yes" },
 	])("rejects invalid options before transport: %j", async (candidate) => {
 		const error = await rejectionOf(
 			requestWithTimeout(
@@ -221,6 +250,7 @@ describe("requestWithTimeout option and body bounds", () => {
 			contentType: "text/plain",
 			headers,
 			body: "body",
+			privateHosts: false,
 			request,
 		};
 		const options = Object.create(null) as NetworkRequestOptions;
