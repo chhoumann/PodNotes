@@ -17,7 +17,12 @@ import {
 	renderTranscriptBody,
 	timestampStyle,
 } from "./publishedTranscript";
-import { refreshModels, transcribe, transcriptionChoice } from "./transcription";
+import {
+	type ProviderChoice,
+	refreshModels,
+	transcribe,
+	transcriptionChoice,
+} from "./transcription";
 
 export const TRANSCRIBE_FROM_AUDIO_COMMAND = "Transcribe current episode from audio";
 
@@ -128,11 +133,28 @@ export class TranscriptionService {
 
 	/** Why audio cannot go to the chosen provider from this device, or undefined when it can. */
 	private refusal(): string | undefined {
+		const run = this.runnable();
+		return typeof run === "string" ? run : undefined;
+	}
+
+	/** The provider and key audio goes to from this device, or the sentence that says why it cannot. */
+	private runnable(): { choice: ProviderChoice; apiKey: string } | string {
 		const { settings, credentials } = this.plugin;
-		const { provider, label } = transcriptionChoice(settings);
-		if (provider === undefined) return unknownProvider(label);
-		if (credentials.has(settings, provider)) return undefined;
-		return credentials.status(settings, provider) === "missing"
+		const choice = transcriptionChoice(settings);
+		if (choice.provider === undefined) return unknownProvider(choice.label);
+		const { provider, label, server } = choice;
+		if (server && !server.endpoint) {
+			return `Enter the address of your ${label}, starting with http:// or https://, in the transcript settings.`;
+		}
+		if (server && !choice.model.id) {
+			return `Enter a model for your ${label} in the transcript settings.`;
+		}
+		const apiKey = credentials.get(settings, provider);
+		const status = credentials.status(settings, provider);
+		if (apiKey || (server && status === "unconfigured")) {
+			return { choice, apiKey: apiKey ?? "" };
+		}
+		return status === "missing"
 			? `The selected ${label} API key is not available on this device. Select or create it in the transcript settings.`
 			: `Select or create ${/^[AEIOU]/.test(label) ? "an" : "a"} ${label} API key in the transcript settings on this device.`;
 	}
@@ -255,12 +277,11 @@ export class TranscriptionService {
 		episode: Episode,
 		updateNotice: (message: string) => void,
 	): Promise<Outcome> {
-		const { settings, credentials, feeds } = this.plugin;
-		await this.waitForLifecycle(refreshModels(settings.transcript.provider));
-		const choice = transcriptionChoice(settings);
-		if (choice.provider === undefined) throw new Error(unknownProvider(choice.label));
-		const apiKey = credentials.get(settings, choice.provider);
-		if (!apiKey) throw new Error(`Missing ${choice.label} API key on this device.`);
+		await this.waitForLifecycle(refreshModels(this.plugin.settings.transcript.provider));
+		const run = this.runnable();
+		if (typeof run === "string") throw new Error(run);
+		const { choice, apiKey } = run;
+		const { feeds } = this.plugin;
 		const { content, warnings } = await this.waitForLifecycle(
 			transcribe({
 				choice,
@@ -289,8 +310,11 @@ export class TranscriptionService {
 
 	private publishedTranscriptFailure(error: PublishedTranscriptError): string {
 		if (this.refusal()) return error.message;
-		const { label } = transcriptionChoice(this.plugin.settings);
-		return `${error.message} Run "${TRANSCRIBE_FROM_AUDIO_COMMAND}" to transcribe it with ${label} instead, which uses your API credit.`;
+		const { label, server } = transcriptionChoice(this.plugin.settings);
+		const offer = `${error.message} Run "${TRANSCRIBE_FROM_AUDIO_COMMAND}" to transcribe it with`;
+		return server
+			? `${offer} your ${label} instead.`
+			: `${offer} ${label} instead, which uses your API credit.`;
 	}
 
 	private waitForLifecycle<T>(operation: Promise<T>): Promise<T> {

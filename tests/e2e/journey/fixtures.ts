@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ObsidianClient } from "obsidian-e2e";
@@ -51,8 +52,25 @@ export type FixtureServer = Readonly<{
 	/** Serves `episode` under `title` from now on, with its GUID and media unchanged. */
 	retitle(feed: FixtureFeed, episode: FixtureEpisode, title: string): void;
 	requests(): readonly string[];
+	/** The address of the OpenAI-compatible transcription server this server also is. */
+	transcriptionServerUrl: string;
+	/** Each request the transcription server answered, oldest first. */
+	transcriptions(): readonly ServerTranscription[];
 	stop(): Promise<void>;
 }>;
+
+export type ServerTranscription = Readonly<{
+	authorization: string | null;
+	model: string | null;
+	responseFormat: string | null;
+	timestampGranularities: readonly string[];
+	fileBytes: number;
+	sha256: string | null;
+}>;
+
+const TRANSCRIPTIONS_PATH = "/v1/audio/transcriptions";
+/** What the transcription server hears in any audio: one sentence at 0 s and one 12 s in. */
+export const SERVER_SPEECH = ["Journey transcript opens here.", "A second speaker answers."];
 
 const SAMPLE_RATE = 8000;
 
@@ -62,6 +80,7 @@ export function pubDate(daysBefore: number): string {
 
 export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise<FixtureServer> {
 	const requests: string[] = [];
+	const transcriptions: ServerTranscription[] = [];
 	const routes = new Map<string, { type: string; body: Buffer; cache?: boolean }>();
 	const holds = new Map<
 		string,
@@ -78,6 +97,10 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 		}
 		if (failing.has(path)) {
 			response.writeHead(503).end();
+			return;
+		}
+		if (request.method === "POST" && path === TRANSCRIPTIONS_PATH) {
+			void answerTranscription(request, response, transcriptions);
 			return;
 		}
 		const route = routes.get(path);
@@ -206,6 +229,8 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 			});
 		},
 		requests: () => [...requests],
+		transcriptionServerUrl: `${origin}/v1`,
+		transcriptions: () => [...transcriptions],
 		stop: () =>
 			new Promise<void>((resolve) => {
 				for (const hold of holds.values()) hold.release();
@@ -213,6 +238,49 @@ export async function startFixtureServer(feeds: readonly FixtureFeed[]): Promise
 				server.closeAllConnections();
 			}),
 	};
+}
+
+/** Answers as a Whisper server does, with verbose_json words, or json text when asked for that. */
+async function answerTranscription(
+	request: http.IncomingMessage,
+	response: http.ServerResponse,
+	transcriptions: ServerTranscription[],
+): Promise<void> {
+	const chunks: Buffer[] = [];
+	for await (const chunk of request) chunks.push(chunk as Buffer);
+	const form = await new Request("http://127.0.0.1/", {
+		method: "POST",
+		headers: { "content-type": request.headers["content-type"] ?? "" },
+		body: Buffer.concat(chunks),
+	}).formData();
+	const file = form.get("file");
+	const bytes = file instanceof Blob ? new Uint8Array(await file.arrayBuffer()) : null;
+	const field = (name: string) => {
+		const value = form.get(name);
+		return typeof value === "string" ? value : null;
+	};
+	transcriptions.push({
+		authorization: request.headers.authorization ?? null,
+		model: field("model"),
+		responseFormat: field("response_format"),
+		timestampGranularities: form
+			.getAll("timestamp_granularities[]")
+			.filter((value) => typeof value === "string"),
+		fileBytes: bytes?.byteLength ?? 0,
+		sha256: bytes && createHash("sha256").update(bytes).digest("hex"),
+	});
+	const words = SERVER_SPEECH.flatMap((sentence, index) =>
+		sentence.split(" ").map((word, at) => ({
+			word,
+			start: index * 12 + at * 0.4,
+			end: index * 12 + at * 0.4 + 0.3,
+		})),
+	);
+	const text = SERVER_SPEECH.join(" ");
+	response.writeHead(200, { "Content-Type": "application/json" });
+	response.end(
+		JSON.stringify(field("response_format") === "verbose_json" ? { text, words } : { text }),
+	);
 }
 
 export function opmlDocument(entries: ReadonlyArray<{ title: string; url: string }>): string {

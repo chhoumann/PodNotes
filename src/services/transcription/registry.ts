@@ -6,6 +6,7 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { deepgram } from "./providers/deepgram";
 import { elevenlabs } from "./providers/elevenlabs";
 import { openai } from "./providers/openai";
+import { openaiCompatible } from "./providers/openaiCompatible";
 import { openrouter } from "./providers/openrouter";
 import type { Listing, ModelProfile, Provider } from "./providers/types";
 
@@ -18,6 +19,7 @@ export const PROVIDERS = {
 	deepgram,
 	openrouter,
 	openai,
+	"openai-compatible": openaiCompatible,
 } satisfies Record<CredentialKind, Provider>;
 
 const PROVIDER_IDS = Object.keys(PROVIDERS) as CredentialKind[];
@@ -37,7 +39,10 @@ export interface ProviderChoice {
 	readonly provider: CredentialKind;
 	/** The provider's name, for buttons and notices. */
 	readonly label: string;
-	/** The stored model, or the first offered when none is stored or the stored one cannot run. */
+	/**
+	 * The stored model, or the first offered when none is stored or the stored one cannot run.
+	 * On a `server`, the model the user named, its ID empty until they name one.
+	 */
 	readonly model: OfferedModel;
 	/** The stored model ID, when this version has no such model. */
 	readonly unknownModel?: string;
@@ -45,6 +50,11 @@ export interface ProviderChoice {
 	readonly withdrawnModel?: ModelProfile;
 	/** The settings ask for speaker labels. Whether the model has them is `model.speakers`. */
 	readonly speakers: boolean;
+	/**
+	 * For a server at an address the user enters: where requests go, undefined until the
+	 * address is an http(s) one. It may need no key.
+	 */
+	readonly server?: { readonly endpoint: string | undefined };
 }
 
 /** A provider a newer PodNotes stored. This version keeps the setting and cannot run it. */
@@ -53,6 +63,7 @@ export interface UnknownProviderChoice {
 	/** The provider's ID as stored. */
 	readonly label: string;
 	readonly speakers: boolean;
+	readonly server?: undefined;
 }
 
 export type TranscriptionChoice = ProviderChoice | UnknownProviderChoice;
@@ -68,6 +79,17 @@ export function transcriptionChoice({
 	const { provider, model: stored, diarization } = transcript;
 	const speakers = diarization.enabled;
 	if (!isOption(PROVIDERS, provider)) return { provider: undefined, label: provider, speakers };
+	const source: Provider = PROVIDERS[provider];
+	const label = PROVIDER_LABELS[provider];
+	if (source.endpoint) {
+		return {
+			provider,
+			label,
+			model: { ...source.models[0], id: stored.trim(), label },
+			speakers,
+			server: { endpoint: source.endpoint(transcript.serverUrl) },
+		};
+	}
 	const models = offeredModels(provider);
 	const model = models.find(({ id }) => id === stored);
 	const withdrawn = model
@@ -75,7 +97,7 @@ export function transcriptionChoice({
 		: PROVIDERS[provider].models.find(({ id }) => id === stored);
 	return {
 		provider,
-		label: PROVIDER_LABELS[provider],
+		label,
 		model: model ?? models[0],
 		unknownModel: model || withdrawn || !stored ? undefined : stored,
 		withdrawnModel: withdrawn,

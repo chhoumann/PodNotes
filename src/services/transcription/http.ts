@@ -9,6 +9,7 @@ export type FailureKind =
 	| "privacy"
 	| "rejected"
 	| "unfetched"
+	| "format"
 	| "rate-limited"
 	| "server"
 	| "network"
@@ -32,6 +33,8 @@ export interface FailureContext {
 	readonly provider: string;
 	readonly model: string;
 	readonly timeoutMs: number;
+	/** The host and port of a server at an address the user entered. */
+	readonly server?: string;
 }
 
 /**
@@ -39,20 +42,26 @@ export interface FailureContext {
  * own error text can quote the address it was sent, so it is never shown or logged.
  */
 const SENTENCES: Record<FailureKind, (context: FailureContext, status?: number) => string> = {
-	auth: ({ provider }) =>
-		`${provider} rejected the API key. Check it in the transcript settings.`,
+	auth: ({ provider, server }) =>
+		`${server ? `The server at ${server}` : provider} rejected the API key. Check it in the transcript settings.`,
 	credits: ({ provider }) =>
 		`Your ${provider} account is out of credit. Add credit there, then try again.`,
-	"model-unavailable": ({ provider, model }) =>
-		`${provider} does not offer the ${model} model to this API key.`,
+	"model-unavailable": ({ provider, model, server }) =>
+		server
+			? `The server at ${server} has no ${model} model at that address. Check the address and the model in the transcript settings.`
+			: `${provider} does not offer the ${model} model to this API key.`,
 	privacy: ({ provider, model }) =>
 		`${provider} does not offer the ${model} model under your ${provider} privacy settings. Change them there, or choose another model in the transcript settings.`,
 	rejected: ({ provider }) => `${provider} could not transcribe this audio.`,
 	unfetched: ({ provider }) => `${provider} could not fetch the episode.`,
+	format: ({ provider }) => `${provider} did not answer in a format PodNotes reads.`,
 	"rate-limited": ({ provider }) =>
 		`${provider} is limiting how fast your key may be used. Try again in a few minutes.`,
 	server: ({ provider }, status) => `${provider} failed (HTTP ${status}). Try again later.`,
-	network: ({ provider }) => `Could not reach ${provider}. Check your connection.`,
+	network: ({ provider, server }) =>
+		server
+			? `PodNotes could not reach the server at ${server}. Check the address in the transcript settings.`
+			: `Could not reach ${provider}. Check your connection.`,
 	timeout: ({ provider, timeoutMs }) =>
 		`${provider} did not answer within ${timeoutMs / 60_000} minutes.`,
 	empty: ({ provider }) => `${provider} found no speech in this episode.`,
@@ -94,6 +103,8 @@ export function createSender(
 	context: FailureContext,
 	signal: AbortSignal,
 ): Send {
+	// Only an address the user entered may be on their own machine or network.
+	const privateHosts = context.server !== undefined;
 	const sendOnce = async (request: ProviderRequest): Promise<unknown> => {
 		const { body, contentType } = await encode(request);
 		let response;
@@ -106,6 +117,7 @@ export function createSender(
 				timeoutMs: context.timeoutMs,
 				maxRequestBodyBytes: body.byteLength,
 				acceptedStatuses: EVERY_HTTP_STATUS,
+				privateHosts,
 				signal,
 			});
 		} catch (error) {
