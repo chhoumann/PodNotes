@@ -154,21 +154,35 @@ function mp3PartStarts(
 }
 
 /**
- * The Layer III frames in `bytes`. A frame counts when it continues the frames before it,
- * or when another frame or the end of the buffer follows it, so sync-like bytes in a tag
- * or cover art don't, and the last frame before trailing metadata does.
+ * The Layer III frames in `bytes`, skipping ID3v2 tags at the start or right after a frame or tag.
+ * A frame counts when it continues the frames before it, or when another frame or the end
+ * of the buffer follows it, so sync-like bytes in other metadata don't, and the last frame
+ * before trailing metadata does.
  */
 function mp3Frames(bytes: Uint8Array): Mp3Frame[] {
 	const frames: Mp3Frame[] = [];
 	let offset = 0;
+	// Where the last frame or tag ended, where the next tag may start.
+	let boundary = 0;
 	while (offset + 4 <= bytes.length) {
+		// An ID3v2 tag: "ID3", version, flags, then its size in 7 bits per byte, which leaves
+		// out the 10-byte header and the 10-byte footer that flag 0x10 adds.
+		const isTag =
+			bytes[offset] === 0x49 && bytes[offset + 1] === 0x44 && bytes[offset + 2] === 0x33;
+		if (isTag && offset === boundary) {
+			let size = 0;
+			for (let index = offset + 6; index < offset + 10; index++)
+				size = (size << 7) | (bytes[index] & 0x7f);
+			offset = boundary = offset + 10 + size + (bytes[offset + 5] & 0x10 ? 10 : 0);
+			continue;
+		}
 		const frame = mp3FrameAt(bytes, offset);
 		const next = frame ? offset + frame.length : 0;
 		const last = frames[frames.length - 1];
 		const continues = last !== undefined && last.offset + last.length === offset;
 		if (frame && (continues || next === bytes.length || mp3FrameAt(bytes, next))) {
 			frames.push(frame);
-			offset = next;
+			offset = boundary = next;
 		} else {
 			offset++;
 		}
