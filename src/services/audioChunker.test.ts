@@ -251,6 +251,25 @@ describe("createChunkFiles with maxSeconds (#532)", () => {
 		expect(joinsInto(parts, episode)).toBe(true);
 	});
 
+	test("an MP3 that a leading tag pushes over the size limit splits into equal chunks, with no one-frame tail", async () => {
+		const stream = MP3_STREAMS.mpeg1At320Kbps;
+		// 512 bytes of tag and 43,690 frames of 960 bytes come to 41,942,912 bytes, just under
+		// twice 20 MiB, but an equal split into two puts the tag's 512 bytes over the limit.
+		const tag = new Uint8Array(512);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x03, 0x76]);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 43_690)]);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(
+			parts.map(
+				(part, index) => (part.bytes.length - (index === 0 ? 512 : 0)) / stream.frameBytes,
+			),
+		).toEqual([14_564, 14_563, 14_563]);
+		for (const part of parts) expect(part.bytes.length).toBeLessThanOrEqual(CHUNK_SIZE_BYTES);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
 	test("an MP3 one frame short of two full chunks splits into two, with no one-frame tail", async () => {
 		const stream = MP3_STREAMS.mpeg1At96Kbps;
 		// 600 s holds 25,000 frames of 24 ms. Summing 0.024 s 25,000 times overshoots 600.
