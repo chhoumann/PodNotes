@@ -40,6 +40,21 @@ describe("model review", () => {
 		]);
 	});
 
+	it("reports a model newer than the curated OpenRouter model even when a direct provider curates it", () => {
+		const { newer, candidates } = review({
+			curated: [
+				{ provider: "openrouter", id: "elevenlabs/scribe-v2" },
+				{ provider: "elevenlabs", id: "scribe_v3" },
+			],
+			catalog: [{ id: "elevenlabs/scribe-v2" }, { id: "elevenlabs/scribe-v3" }],
+			today: "2026-11-14",
+		});
+		expect(newer.map(({ model, than }) => [model.id, than])).toEqual([
+			["elevenlabs/scribe-v3", "elevenlabs/scribe-v2"],
+		]);
+		expect(candidates).toEqual([]);
+	});
+
 	it("lists a model of no curated family once as a candidate", () => {
 		expect(result.candidates.map(({ id }) => id)).toEqual([
 			"elevenlabs/scribe-v2-medical",

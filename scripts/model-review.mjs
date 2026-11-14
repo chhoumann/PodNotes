@@ -91,12 +91,24 @@ export function review({ curated, catalog, today }) {
 		}
 	}
 
-	/** @type {Map<string, { id: string, version: number[] }[]>} */
+	/** @type {Map<string, { provider: string, id: string, version: number[] }[]>} */
 	const families = new Map();
 	for (const { provider, id } of curated) {
 		const { family, version } = parse(provider, id);
-		families.set(family, [...(families.get(family) ?? []), { id, version }]);
+		families.set(family, [...(families.get(family) ?? []), { provider, id, version }]);
 	}
+
+	/**
+	 * The newest curated model a catalog model is measured against: the OpenRouter one when
+	 * the family has any, since a direct provider's version says nothing about it.
+	 * @param {{ provider: string, id: string, version: number[] }[]} own
+	 */
+	const latest = (own) => {
+		const viaOpenRouter = own.filter(({ provider }) => provider === "openrouter");
+		return (viaOpenRouter.length > 0 ? viaOpenRouter : own).reduce((a, b) =>
+			compare(b.version, a.version) > 0 ? b : a,
+		);
+	};
 
 	const newer = [];
 	const candidates = [];
@@ -107,9 +119,8 @@ export function review({ curated, catalog, today }) {
 		const { family, version } = parse("", model.id);
 		const own = families.get(family);
 		if (!own) candidates.push(model);
-		else if (own.every((curatedModel) => compare(version, curatedModel.version) > 0)) {
-			const [latest] = [...own].sort((a, b) => compare(b.version, a.version));
-			newer.push({ model, than: latest.id });
+		else if (compare(version, latest(own).version) > 0) {
+			newer.push({ model, than: latest(own).id });
 		} else if (!own.some((curatedModel) => compare(version, curatedModel.version) === 0)) {
 			candidates.push(model);
 		}
