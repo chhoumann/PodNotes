@@ -162,26 +162,25 @@ const SAMPLE_RATES = [
  */
 function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: number): number[] {
 	const frames = mp3Frames(bytes);
-	const seconds = frames.reduce((total, frame) => total + frame.seconds, 0);
-	const chunks = Math.max(Math.ceil(bytes.length / maxBytes), Math.ceil(seconds / maxSeconds));
+	// Frames in one stream last equally long, so chunks are counted in frames: summing
+	// frame durations drifts past maxSeconds and would split off a one-frame tail.
+	const framesPerCap =
+		frames.length > 0 ? Math.floor(maxSeconds / frames[0].seconds + 1e-9) : Infinity;
+	const chunks = Math.max(
+		Math.ceil(bytes.length / maxBytes),
+		Math.ceil(frames.length / framesPerCap),
+	);
 	const framesPerChunk = Math.ceil(frames.length / chunks);
 	const ends: number[] = [];
 	let start = 0;
 	let chunkFrames = 0;
-	let chunkSeconds = 0;
 	for (const frame of frames) {
-		if (
-			chunkFrames === framesPerChunk ||
-			frame.offset + frame.length - start > maxBytes ||
-			chunkSeconds + frame.seconds > maxSeconds
-		) {
+		if (chunkFrames === framesPerChunk || frame.offset + frame.length - start > maxBytes) {
 			ends.push(frame.offset);
 			start = frame.offset;
 			chunkFrames = 0;
-			chunkSeconds = 0;
 		}
 		chunkFrames++;
-		chunkSeconds += frame.seconds;
 	}
 	ends.push(bytes.length);
 	return ends;

@@ -250,6 +250,19 @@ describe("createChunkFiles with maxSeconds (#532)", () => {
 		expect(Array.from(parts[0].bytes.subarray(0, 3))).toEqual([0x49, 0x44, 0x33]);
 		expect(joinsInto(parts, episode)).toBe(true);
 	});
+
+	test("an MP3 one frame short of two full chunks splits into two, with no one-frame tail", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// 600 s holds 25,000 frames of 24 ms. Summing 0.024 s 25,000 times overshoots 600.
+		const episode = mp3Bytes(stream, 49_999);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length / stream.frameBytes)).toEqual([
+			25_000, 24_999,
+		]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
 });
 
 describe("createChunkFiles large-file routing (other-logic-bug)", () => {
