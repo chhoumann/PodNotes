@@ -716,7 +716,10 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 						setting.setDesc(
 							unable ? `${choice.model.label} does not label speakers.` : "",
 						);
-						setting.setDisabled(unable || this.settingsInteractionLockCount > 0);
+						// A model without speaker labels still lets labels left on be turned off.
+						setting.setDisabled(
+							(unable && !choice.speakers) || this.settingsInteractionLockCount > 0,
+						);
 					});
 				});
 				return stop;

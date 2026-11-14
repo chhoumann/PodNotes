@@ -369,15 +369,21 @@ describe("Transcripts", () => {
 		expect((await disk()).transcript).toMatchObject({ provider: "deepgram", model: "" });
 	});
 
-	test("Speaker labels cannot be changed for a model without them, and the row says why", () => {
-		const { ui, provider, speakerLabels } = openTranscripts(
+	test("Speaker labels can only be turned off for a model without them, and the row says why", async () => {
+		const { ui, provider, speakerLabels, disk } = openTranscripts(
 			transcript({ provider: "openai", ...withSpeakerLabels(true) }),
 		);
 		const reason = "GPT Transcribe does not label speakers.";
 
 		expect(speakerLabels()).toBeChecked();
-		expect(speakerLabels()).toBeDisabled();
+		expect(speakerLabels()).toBeEnabled();
 		expect(ui.getByText(reason)).toBeVisible();
+
+		speakerLabels().click();
+
+		expect(speakerLabels()).not.toBeChecked();
+		expect(speakerLabels()).toBeDisabled();
+		expect((await disk()).transcript.diarization.enabled).toBe(false);
 
 		choose(provider(), "deepgram");
 
