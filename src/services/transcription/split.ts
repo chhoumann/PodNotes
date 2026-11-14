@@ -91,9 +91,10 @@ const SAMPLE_RATES = [
 ];
 
 /**
- * Where each part of an MP3 starts, in bytes and in seconds of audio. Parts start at frame
- * starts, there are as few as both caps allow, and they hold an equal number of frames, so
- * no part is a few seconds long. The first part starts at byte 0 and keeps a leading tag.
+ * Where each part of an MP3 starts, in bytes and in seconds of audio: at frame starts, in as
+ * few parts as both caps allow, cut as close to equal frame counts as the size cap lets
+ * them be, so no part is a one-frame tail that cannot be decoded. The first part starts at
+ * byte 0 and keeps a leading tag.
  */
 function mp3PartStarts(
 	frames: Mp3Frame[],
@@ -101,40 +102,46 @@ function mp3PartStarts(
 	maxBytes: number,
 	maxSeconds: number,
 ): { offset: number; seconds: number }[] {
+	const count = frames.length;
 	// Frames in one stream last equally long, so parts are counted in frames: summing frame
 	// durations drifts past maxSeconds.
 	const frameSeconds = frames[0].seconds;
 	const framesPerCap = Math.floor(maxSeconds / frameSeconds + 1e-9);
-	const offsetOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
-	// The fewest parts that fit both caps, each taking an equal share of the frames still to
-	// place and stepping back a frame at a time while it is over maxBytes, so parts differ
-	// by a frame or so and none is a one-frame tail.
-	for (
-		let parts = Math.max(
-			Math.ceil(byteLength / maxBytes),
-			Math.ceil(frames.length / framesPerCap),
-		);
-		;
-		parts++
-	) {
-		const firsts = [0];
-		for (let left = parts - 1; left > 0; left--) {
-			const first = firsts[firsts.length - 1];
-			const share = Math.ceil((frames.length - first) / (left + 1));
-			let next = Math.min(first + Math.min(share, framesPerCap), frames.length - left);
-			while (next > first + 1 && frames[next].offset - offsetOf(first) > maxBytes) next--;
-			firsts.push(next);
-		}
-		const last = firsts[firsts.length - 1];
-		const lastFits =
-			frames.length - last <= framesPerCap && byteLength - offsetOf(last) <= maxBytes;
-		if (lastFits || parts >= frames.length) {
-			return firsts.map((first) => ({
-				offset: offsetOf(first),
-				seconds: first * frameSeconds,
-			}));
-		}
+	const startOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
+	const endOf = (end: number) => (end === count ? byteLength : frames[end].offset);
+	const fits = (first: number, end: number) =>
+		end - first <= framesPerCap && endOf(end) - startOf(first) <= maxBytes;
+	/** The end of the longest part that starts at `first` and fits. */
+	const furthest = (first: number) => {
+		let end = Math.min(count, first + framesPerCap);
+		while (end > first + 1 && !fits(first, end)) end--;
+		return end;
+	};
+	/** The start of the longest part that ends at `end` and fits. */
+	const earliest = (end: number) => {
+		let first = Math.max(0, end - framesPerCap);
+		while (first < end - 1 && !fits(first, end)) first++;
+		return first;
+	};
+	// Filling each part as far as it fits gives the fewest parts.
+	let parts = 0;
+	for (let first = 0; first < count; first = furthest(first)) parts++;
+	// lowest[index] is the earliest frame part `index` may start at and still leave the parts
+	// after it able to reach the end.
+	const lowest: number[] = [];
+	for (let index = parts - 1, end = count; index > 0; index--) {
+		end = earliest(end);
+		lowest[index] = end;
 	}
+	// Each cut aims at an equal share of the frames still to place, within what keeps this
+	// part and the ones after it fitting.
+	const firsts = [0];
+	for (let index = 1; index < parts; index++) {
+		const first = firsts[index - 1];
+		const share = first + Math.ceil((count - first) / (parts - index + 1));
+		firsts.push(Math.min(Math.max(share, lowest[index]), furthest(first)));
+	}
+	return firsts.map((first) => ({ offset: startOf(first), seconds: first * frameSeconds }));
 }
 
 /**

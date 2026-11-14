@@ -160,6 +160,81 @@ describe("an MP3 over a cap", () => {
 		expect(joinsInto(parts, episode)).toBe(true);
 	});
 
+	test("an MP3 whose bitrate rises moves the cut forward rather than adding a part", async () => {
+		const low = MP3_STREAMS.mpeg1At96Kbps;
+		const high = MP3_STREAMS.mpeg1At320Kbps;
+		// 21,847 low-bitrate frames, then 21,845 high-bitrate frames and an ID3v1 tag. An even
+		// cut leaves 288 + 20,971,200 + 128 bytes after it, over 20 MiB; one frame later fits.
+		const tag = new Uint8Array(128);
+		tag.set([0x54, 0x41, 0x47]);
+		const episode = Buffer.concat([mp3Bytes(low, 21_847), mp3Bytes(high, 21_845), tag]);
+
+		const parts = await split(episode, { maxBytes: 20 * MIB, maxSeconds: 1400 });
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			21_847 * low.frameBytes,
+			21_845 * high.frameBytes + tag.length,
+		]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("cuts every MP3 into the fewest parts that fit both caps", async () => {
+		// A seeded generator, so a failure names a reproducible case.
+		let seed = 532;
+		const random = () => {
+			seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+			return seed / 2_147_483_648;
+		};
+		const kinds = [MP3_STREAMS.mpeg1At96Kbps, MP3_STREAMS.mpeg1At320Kbps];
+		for (let trial = 0; trial < 300; trial++) {
+			const kindsUsed: (typeof kinds)[number][] = [];
+			while (kindsUsed.length < 20 + Math.floor(random() * 100)) {
+				const kind = kinds[Math.floor(random() * 2)];
+				for (let run = 1 + Math.floor(random() * 12); run > 0; run--) kindsUsed.push(kind);
+			}
+			const lead = random() < 0.5 ? 512 : 0;
+			const tail = new Uint8Array(random() < 0.5 ? 128 : 0);
+			if (tail.length) tail.set([0x54, 0x41, 0x47]);
+			const bytes = new Uint8Array(
+				Buffer.concat([
+					new Uint8Array(lead),
+					...kindsUsed.map((kind) => mp3Bytes(kind, 1)),
+					tail,
+				]),
+			);
+			const maxBytes = 2_000 + Math.floor(random() * 20_000);
+			const framesPerCap = 3 + Math.floor(random() * 40);
+
+			// Brute force: the fewest parts, where a part is a run of frames within both caps.
+			const offsets = [lead];
+			for (const kind of kindsUsed)
+				offsets.push(offsets[offsets.length - 1] + kind.frameBytes);
+			const startOf = (index: number) => (index === 0 ? 0 : offsets[index]);
+			const endOf = (index: number) =>
+				index === kindsUsed.length ? bytes.length : offsets[index];
+			const fewest: number[] = [0];
+			for (let end = 1; end <= kindsUsed.length; end++) {
+				fewest[end] = Infinity;
+				for (let first = Math.max(0, end - framesPerCap); first < end; first++) {
+					if (endOf(end) - startOf(first) <= maxBytes) {
+						fewest[end] = Math.min(fewest[end], fewest[first] + 1);
+					}
+				}
+			}
+			if (fewest[kindsUsed.length] === Infinity) continue;
+
+			const parts = await split(bytes, { maxBytes, maxSeconds: framesPerCap * 0.024 });
+
+			const context = `trial ${trial}`;
+			expect(parts.length, context).toBe(fewest[kindsUsed.length]);
+			for (const part of parts) {
+				expect(part.bytes.length, context).toBeGreaterThan(0);
+				expect(part.bytes.length, context).toBeLessThanOrEqual(maxBytes);
+			}
+			expect(joinsInto(parts, bytes), context).toBe(true);
+		}
+	});
+
 	test("an MP3 one frame short of two full parts splits into two, with no one-frame tail", async () => {
 		const stream = MP3_STREAMS.mpeg1At96Kbps;
 		// 600 s holds 25,000 frames of 24 ms. Summing 0.024 s 25,000 times overshoots 600.
