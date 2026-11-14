@@ -1,0 +1,52 @@
+name: Model review
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: Review models
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Review models
+        id: review
+        run: |
+          status=0
+          node scripts/model-review.mjs > "$RUNNER_TEMP/report.md" || status=$?
+          # A catalog that could not be read leaves no report, and fails the job here.
+          test -s "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Update the review issue
+        run: |
+          gh label create model-review --description "Weekly transcription model review" --force
+          number=$(gh issue list --label model-review --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/report.md"
+          else
+            gh issue create --title "Review transcription models" --label model-review --body-file "$RUNNER_TEMP/report.md"
+          fi
+        env:
+          GH_REPO: ${{ github.repository }}
+
+      - name: Fail when a curated model is gone or past its end date
+        if: steps.review.outputs.status != '0'
+        run: exit 1
