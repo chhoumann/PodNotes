@@ -48,6 +48,7 @@ root symlinks for local Obsidian loading.
 - `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test, including rejection of tagged templates that disable Obsidian's eval cache. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
 - `npm run plant -- <test name> <file> <search> <replace> [<file> <search> <replace>...] [-- <command...>]`: plant a defect and pass only when the exactly named test fails on it and the command passes again once restored. Each search must match exactly once, and the plant must type-check. The files are restored on exit or interrupt. The command defaults to the unit suite filtered to the test name.
+- `npm run review:models`: compare the curated transcription models in `src/services/transcription/providers/` with OpenRouter's public catalog, report models that are gone, ending, newer in a curated family, or not curated, and exit 1 when a curated OpenRouter model is gone or past its end date. The `Model review` workflow runs it weekly and keeps one `model-review` issue current. It is not a required check.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 
 `@typescript/native` aliases TypeScript 7. `typecheck` and `lint:tsconfig` call

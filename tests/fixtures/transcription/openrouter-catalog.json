@@ -1,0 +1,52 @@
+{
+	"data": [
+		{
+			"id": "deepgram/nova-4",
+			"name": "Deepgram: Nova 4",
+			"created": 1794500000,
+			"expiration_date": null
+		},
+		{
+			"id": "x-ai/grok-stt-2.0",
+			"name": "SpaceXAI: Grok STT 2.0",
+			"created": 1794329167,
+			"expiration_date": "2026-11-01"
+		},
+		{
+			"id": "elevenlabs/scribe-v2",
+			"name": "ElevenLabs: Scribe v2",
+			"created": 1791386190,
+			"expiration_date": null
+		},
+		{
+			"id": "elevenlabs/scribe-v2-medical",
+			"name": "ElevenLabs: Scribe v2 Medical",
+			"created": 1791385619,
+			"expiration_date": null
+		},
+		{
+			"id": "google/chirp-3",
+			"name": "Google: Chirp 3",
+			"created": 1777997783,
+			"expiration_date": null
+		},
+		{
+			"id": "openai/gpt-transcribe",
+			"name": "OpenAI: GPT Transcribe",
+			"created": 1785973897,
+			"expiration_date": null
+		},
+		{
+			"id": "x-ai/grok-stt-1.0",
+			"name": "SpaceXAI: Grok STT 1.0",
+			"created": 1784817014,
+			"expiration_date": "2026-11-15"
+		},
+		{
+			"id": "deepgram/nova-3",
+			"name": "Deepgram: Nova 3",
+			"created": 1784075761,
+			"expiration_date": null
+		}
+	]
+}
