@@ -41,7 +41,8 @@ jobs:
           number=$(gh issue list --label model-review --state open --limit 1 --json number --jq '.[0].number // empty')
           if [ -n "$number" ]; then
             gh issue edit "$number" --body-file "$RUNNER_TEMP/report.md"
-          else
+          elif grep -qE '^## (Curated models gone or ending|Newer models in a curated family)$' "$RUNNER_TEMP/report.md"; then
+            # Uncurated candidates alone do not reopen a review the maintainer closed.
             gh issue create --title "Review transcription models" --label model-review --body-file "$RUNNER_TEMP/report.md"
           fi
         env:
