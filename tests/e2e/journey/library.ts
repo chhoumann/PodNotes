@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ObsidianClient, PluginHandle, SandboxApi } from "obsidian-e2e";
 import { onTestFinished } from "vitest";
 import e2eConfig from "../../../obsidian-e2e.config.mjs";
+import { CREDENTIALS } from "../../../src/types/Credentials";
 import { installWriteRecorder } from "../../../scripts/write-counts.mjs";
 import { jsLiteral, PLUGIN_ID, RELOAD_OPTIONS, VIEW_TYPE } from "../runtime";
 import { collectRuntimeErrors } from "../runtime-evidence";
@@ -52,7 +53,12 @@ export type LibrarySeed = Readonly<{
 		finished: boolean;
 	}>;
 	/** The provider the library transcribes with, and the SecretStorage ID of its key. */
-	transcription?: Readonly<{ provider: "openai" | "elevenlabs"; secretId: string }>;
+	transcription?: Readonly<{
+		provider: "openai" | "elevenlabs" | "openrouter";
+		secretId: string;
+		/** The recommended model when left out. */
+		model?: string;
+	}>;
 	transcriptTemplate?: string;
 	noteTemplate?: string;
 }>;
@@ -334,9 +340,10 @@ export async function seedLibrary(
 			]),
 		);
 		if (seed.transcription) {
-			const { provider, secretId } = seed.transcription;
+			const { provider, secretId, model = "" } = seed.transcription;
 			data.transcript.provider = provider;
-			data[provider === "openai" ? "openAISecretId" : "elevenLabsSecretId"] = secretId;
+			data.transcript.model = model;
+			data[CREDENTIALS[provider].settingsKey] = secretId;
 		}
 		if (seed.transcriptTemplate) data.transcript.template = seed.transcriptTemplate;
 		if (seed.noteTemplate) data.note.template = seed.noteTemplate;
