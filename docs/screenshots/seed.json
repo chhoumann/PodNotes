@@ -45,5 +45,23 @@
 	"demo": {
 		"at": 2287,
 		"note": "Opportunity cost is a man at the door with two keys. Use it in the talk."
+	},
+	"transcript": {
+		"podcast": "Slow Thinking",
+		"title": "Walking as thinking",
+		"turns": [
+			[
+				0,
+				0,
+				"Why do so many writers say the sentence only came together once they stood up from the desk?"
+			],
+			[
+				8,
+				1,
+				"At a desk your eyes stay fixed on the page, and the argument narrows to whatever is already in front of you."
+			],
+			[19, 0, "And ten minutes into a walk, the knot comes undone on its own."],
+			[25, 1, "Your pace gives the thought a rhythm, without asking you to finish it yet."]
+		]
 	}
 }
