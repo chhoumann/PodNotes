@@ -851,6 +851,49 @@ describe("TranscriptionService", () => {
 			expectUpload("SIGNED-TOKEN", "cdn.example.com");
 		});
 
+		test.each([
+			[
+				"AWS",
+				"X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=CRED&X-Amz-Signature=SIGNED",
+			],
+			[
+				"Google Cloud",
+				"X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=CRED&X-Goog-Signature=SIGNED",
+			],
+			["CloudFront", "Expires=1900000000&Signature=SIGNED&Key-Pair-Id=CRED"],
+			["Azure", "sv=2024-11-04&se=2030-01-01&sp=r&sig=SIGNED"],
+		])(
+			"an episode whose address is a %s signed URL is uploaded, and no request holds the address",
+			async (_, query) => {
+				providerMock.mockImplementation(async () => Response.json(answers));
+				const episode: Episode = {
+					...mockEpisode,
+					streamUrl: `https://cdn.example.com/episode.mp3?${query}`,
+				};
+				const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+				await transcribe(plugin, episode);
+
+				expectUpload("SIGNED", "cdn.example.com");
+			},
+		);
+
+		test("a public episode whose address has tracking parameters goes by its address", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const streamUrl =
+				"https://cdn.example.com/episode.mp3?aid=rss_feed&feed=AbC123&updated=1700000000&utm_source=podcast";
+			const episode: Episode = { ...mockEpisode, streamUrl };
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+			await transcribe(plugin, episode);
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			const [request] = providerMock.mock.calls[0];
+			expect(JSON.parse(new TextDecoder().decode(sentBytes(request)))).toEqual({
+				url: streamUrl,
+			});
+		});
+
 		test("an episode on a private network is uploaded, and no request holds its address", async () => {
 			providerMock.mockImplementation(async () => Response.json(answers));
 			const episode: Episode = {

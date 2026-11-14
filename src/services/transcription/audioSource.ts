@@ -19,10 +19,20 @@ export type PublicAudioUrl = string & { readonly [publicAudio]: true };
  * - a saved public feed lists exactly this address as an item's enclosure. A private feed's
  *   episode never passes, even with a clean-looking address, because publishers put the
  *   subscriber's token in the path. Neither does a local file, which no feed lists;
- * - the address carries no credential and names a public http(s) host.
+ * - the address carries no credential or signed-URL parameter and names a public http(s) host.
  *
  * Anything else resolves undefined and is uploaded, which is always correct.
  */
+/**
+ * A query parameter that signs a URL: AWS and Google Cloud's X-Amz- and X-Goog- credential,
+ * signature and token, and Akamai's tokens. Matched within the name, so an unknown scheme's
+ * signature uploads the audio.
+ */
+const SIGNED_URL_PARAM = /signature|credential|token|^hdnts$/i;
+
+const isSignedUrl = (address: string): boolean =>
+	[...new URL(address).searchParams.keys()].some((name) => SIGNED_URL_PARAM.test(name));
+
 export async function publicAudioUrl(
 	episode: Episode,
 	feeds: Pick<FeedRepository, "load" | "subscribe">,
@@ -36,7 +46,8 @@ export async function publicAudioUrl(
 		return state.episodes.some((item) => item.streamUrl === address);
 	};
 
-	if (isCredentialBearingUrl(address) || !isFetchableUrl(address)) return undefined;
+	if (isCredentialBearingUrl(address) || !isFetchableUrl(address) || isSignedUrl(address))
+		return undefined;
 	if (listed() === undefined) return undefined;
 	const loaded = await feeds.load([key], "cached");
 	// The cache keeps a long feed's newest items, so an older episode needs the whole feed.
