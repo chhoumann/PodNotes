@@ -7,7 +7,7 @@ import {
 	type PersistedPodNotesSettings,
 	PodNotesDataError,
 } from "./persistence/podNotesData";
-import type { CredentialValues } from "./types/Credentials";
+import { CREDENTIAL_KINDS, CREDENTIALS, type CredentialValues } from "./types/Credentials";
 import type { Episode } from "./types/Episode";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 import { ownRecord } from "./utility/ownRecord";
@@ -35,22 +35,15 @@ export const VAULT_LOCAL_KEYS: readonly (keyof IPodNotesSettings)[] = [
 ];
 
 /** Provider API-key references are device-local, not settings transfer data. */
-const SECRET_REFERENCE_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set([
-	"openAISecretId",
-	"deepgramSecretId",
-]);
+const SECRET_REFERENCE_KEYS: ReadonlySet<keyof IPodNotesSettings> = new Set(
+	CREDENTIAL_KINDS.map((kind) => CREDENTIALS[kind].settingsKey),
+);
 
+/** Plaintext fields that versions before 2.19.0 wrote. No new kind joins them. */
 const LEGACY_SECRET_KEYS = {
 	openAIApiKey: "openAI",
 	diarizationApiKey: "deepgram",
 } as const;
-
-/** Human-facing names for each secret, so export/import copy can name exactly
- * which keys leave or enter the vault instead of hard-coding "OpenAI". */
-const SECRET_KEY_LABELS: Record<keyof CredentialValues, string> = {
-	openAI: "OpenAI API key",
-	deepgram: "Deepgram API key",
-};
 
 /**
  * The human-facing labels for the secrets actually present (non-empty) in a
@@ -59,9 +52,9 @@ const SECRET_KEY_LABELS: Record<keyof CredentialValues, string> = {
  * user is never told only "OpenAI API key" (and vice versa). See issue #168.
  */
 export function describeSecrets(secrets: CredentialValues): string[] {
-	return (Object.keys(SECRET_KEY_LABELS) as (keyof CredentialValues)[])
-		.filter((key) => Boolean(secrets[key]?.trim()))
-		.map((key) => SECRET_KEY_LABELS[key]);
+	return CREDENTIAL_KINDS.filter((kind) =>
+		Boolean(secrets[CREDENTIALS[kind].exportKey]?.trim()),
+	).map((kind) => `${CREDENTIALS[kind].label} API key`);
 }
 
 /** Known top-level setting keys that are safe to import (excludes vault-local state). */
@@ -382,9 +375,10 @@ function parseSecretsPayload(value: unknown): { values: CredentialValues } | { e
 		return { error: "Export file has an invalid secrets payload." };
 	}
 
-	for (const key of ["openAI", "deepgram"] as const) {
-		if (value[key] !== undefined && typeof value[key] !== "string") {
-			return { error: `Export file has an invalid ${SECRET_KEY_LABELS[key]}.` };
+	for (const kind of CREDENTIAL_KINDS) {
+		const { exportKey, label } = CREDENTIALS[kind];
+		if (value[exportKey] !== undefined && typeof value[exportKey] !== "string") {
+			return { error: `Export file has an invalid ${label} API key.` };
 		}
 	}
 
@@ -392,12 +386,13 @@ function parseSecretsPayload(value: unknown): { values: CredentialValues } | { e
 }
 
 function normalizeSecrets(values: CredentialValues): CredentialValues {
-	const openAI = values.openAI?.trim();
-	const deepgram = values.deepgram?.trim();
-	return {
-		...(openAI ? { openAI } : {}),
-		...(deepgram ? { deepgram } : {}),
-	};
+	const normalized: CredentialValues = {};
+	for (const kind of CREDENTIAL_KINDS) {
+		const key = CREDENTIALS[kind].exportKey;
+		const value = values[key]?.trim();
+		if (value) normalized[key] = value;
+	}
+	return normalized;
 }
 
 /** Drop any playlist entry that isn't a plain object with an `episodes` array. */
