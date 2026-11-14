@@ -53,6 +53,7 @@ import {
 	removeItunesStub,
 	removeOpenAIStub,
 	removeOpenRouterStub,
+	SERVER_SPEECH,
 	startFixtureServer,
 	transcriptionUploads,
 } from "./journey/fixtures";
@@ -1010,6 +1011,57 @@ describe("resilience journeys", () => {
 			]);
 		}, 60_000);
 	});
+
+	test("J-TR-11 an OpenAI-compatible server on this machine gets the episode's audio, with no key, and its word times time the note", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const spoken: FixtureEpisode = { title: "Spoken Episode", seconds: 4, pubDate: pubDate(0) };
+		const show: FixtureFeed = {
+			title: "Journey Own Server",
+			slug: "own-server",
+			artwork: true,
+			episodes: [spoken],
+		};
+		const server = await serve(show);
+		await seedLibrary(context, server, {
+			subscriptions: [show],
+			current: storedEpisode(server, show, spoken),
+			transcription: {
+				provider: "openai-compatible",
+				secretId: "",
+				model: "whisper-large-v3-turbo",
+				serverUrl: `${server.transcriptionServerUrl}/`,
+			},
+		});
+		const notePath = `Transcripts/${show.title}/${spoken.title}.md`;
+
+		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
+		await sandbox.waitForExists(notePath, { timeoutMs: 30_000 });
+
+		const link = (time: number) =>
+			`obsidian://podnotes?episodeName=Spoken%20Episode&url=${encodeURIComponent(server.feedUrl(show))}&time=${time}`;
+		expect(
+			(await readVaultText(obsidian, sandbox.path(notePath))).replace(
+				/^Date: .+$/m,
+				"Date: <date>",
+			),
+		).toBe(
+			`# Spoken Episode\n\nPodcast: ${show.title}\nDate: <date>\n\n` +
+				`[00:00:00](${link(0)}) ${SERVER_SPEECH[0]}\n\n` +
+				`[00:00:12](${link(12)}) ${SERVER_SPEECH[1]}`,
+		);
+		const audio = server.audio(show, spoken);
+		expect(server.transcriptions()).toEqual([
+			{
+				authorization: null,
+				model: "whisper-large-v3-turbo",
+				responseFormat: "verbose_json",
+				timestampGranularities: ["word", "segment"],
+				fileBytes: audio.byteLength,
+				sha256: createHash("sha256").update(audio).digest("hex"),
+			},
+		]);
+	}, 60_000);
 
 	test("J-TR-05 feed text cannot give the transcript note a block ID or an inline field", async () => {
 		const context = getContext();
