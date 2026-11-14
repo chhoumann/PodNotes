@@ -2,9 +2,10 @@
 // Network log for this worktree's Obsidian instance, with a fixture provider in
 // place of the paid transcription APIs.
 //
-//   node .claude/skills/verify/net.mjs watch     start a fresh log; answer ElevenLabs, Deepgram and OpenAI locally
+//   node .claude/skills/verify/net.mjs watch     start a fresh log; answer ElevenLabs, Deepgram, OpenRouter
+//                                                and OpenAI locally, OpenRouter's model catalog included
 //   node .claude/skills/verify/net.mjs log       print each request as JSON, oldest first; a path only
-//                                                for the fixture server and the three providers
+//                                                for the fixture server and the four providers
 //   node .claude/skills/verify/net.mjs unwatch   restore fetch and requestUrl
 //
 // PodNotes sends its requests (feeds, audio, transcripts, the providers)
@@ -33,7 +34,20 @@ const instance = resolveInstanceOptions(
 const CALL_TIMEOUT_MS = 15000;
 const FIXTURE_TRANSCRIPTION = "This text came from the fixture provider.";
 const FIXTURE_REPLY = "A second speaker answers.";
-const PATH_HOSTS = [FIXTURE_HOST, "api.elevenlabs.io", "api.deepgram.com", "api.openai.com"];
+const PATH_HOSTS = [
+	FIXTURE_HOST,
+	"api.elevenlabs.io",
+	"api.deepgram.com",
+	"openrouter.ai",
+	"api.openai.com",
+];
+const OPENROUTER_TRANSCRIPTIONS = "https://openrouter.ai/api/v1/audio/transcriptions";
+const OPENROUTER_CATALOG = "https://openrouter.ai/api/v1/models?";
+const OPENROUTER_MODELS = [
+	"x-ai/grok-stt-2.0",
+	"elevenlabs/scribe-v2",
+	"microsoft/mai-transcribe-2",
+];
 
 /** @param {string} code */
 async function evaluate(code) {
@@ -92,10 +106,16 @@ const WATCH = `(() => {
 		return index === 0 ? [word] : [{ text: " ", type: "spacing", start, end: start, speaker_id: word.speaker_id }, word];
 	});
 	const elevenlabs = { language_code: "eng", text: text + " " + reply, words: [...scribeWords(text, 0, 0), ...scribeWords(reply, 1, 12)] };
-	// A multipart request that names an address in place of a file is a few hundred bytes.
+	// OpenRouter's verbose_json words, at the same times, with numbered speakers.
+	const openRouterWords = (sentence, speaker, from) => words(sentence, speaker, from).map(({ punctuated_word, start, end }) => ({ word: punctuated_word, start, end, speaker, speaker_label: "speaker_" + speaker, confidence: 0.99 }));
+	const openrouter = { text: text + " " + reply, words: [...openRouterWords(text, 0, 0), ...openRouterWords(reply, 1, 12)] };
+	const openrouterCatalog = { data: ${jsLiteral(OPENROUTER_MODELS)}.map((id) => ({ id, expiration_date: null })) };
+	// A request that names an address in place of a file is a few hundred bytes: multipart
+	// with source_url for ElevenLabs, JSON with input_audio.url for OpenRouter.
 	const namedAddress = (request) => {
 		if (!(request.body?.byteLength < 4096)) return undefined;
-		const match = /name="source_url"\\r\\n\\r\\n([^\\r]+)/.exec(new TextDecoder().decode(request.body));
+		const body = new TextDecoder().decode(request.body);
+		const match = /name="source_url"\\r\\n\\r\\n([^\\r]+)/.exec(body) ?? /"input_audio":\\{"url":"([^"]+)"/.exec(body);
 		return match ? logged(match[1]) : undefined;
 	};
 	const originalFetch = window.fetch;
@@ -116,7 +136,11 @@ const WATCH = `(() => {
 					? deepgram
 					: request.url.startsWith("https://api.elevenlabs.io/")
 						? elevenlabs
-						: null;
+						: request.url === ${jsLiteral(OPENROUTER_TRANSCRIPTIONS)}
+							? openrouter
+							: request.url.startsWith(${jsLiteral(OPENROUTER_CATALOG)})
+								? openrouterCatalog
+								: null;
 			if (answer) {
 				entries.push({ via: "requestUrl", method, url: logged(request.url), answeredBy: "fixture provider", contentType: request.contentType, uploadBytes: request.body?.byteLength ?? 0, sourceUrl: namedAddress(request) });
 				const body = new TextEncoder().encode(JSON.stringify(answer)).buffer;
