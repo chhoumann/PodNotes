@@ -229,7 +229,8 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   provider while it watches. It decodes Grok's MP3 uploads with Chromium's
   decoder and hears a tone under 500 Hz as one speaker and a higher tone as
   another, and logs each upload's `decodedSeconds` and `heardSpeakers`. Audio
-  it cannot decode is answered with a 400.
+  it cannot decode is answered with a 400. It answers Voxtral with segments, or
+  a 400 when asked for word times, and Qwen3 ASR with words and no speakers.
 
 - `.claude/skills/verify/ui.mjs` sends trusted input through
   `obsidian dev:cdp`. Its verbs are `click <css> [--text <s>] [--right]`,

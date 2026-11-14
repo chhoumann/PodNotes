@@ -9,6 +9,7 @@ import type {
 	PartTranscript,
 	Provider,
 	ProviderRequest,
+	Segment,
 	Word,
 } from "./types";
 
@@ -20,6 +21,8 @@ const CATALOG_URL = "https://openrouter.ai/api/v1/models?output_modalities=trans
  * 1,980 s were answered in 20 to 31 s, so these leave room.
  */
 const PART_CAPS = { maxUploadBytes: 18_000_000, maxSeconds: 1800 };
+/** Voxtral and Qwen3 ASR took 33 to 35 s to answer 20 MB, so they get smaller parts. */
+const SLOW_PART_CAPS = { maxUploadBytes: 12_000_000, maxSeconds: 900 };
 
 type Body = (input: PartInput) => Promise<ProviderRequest["body"]>;
 
@@ -51,10 +54,10 @@ const grok: Body = async ({ model, speakers, audio }) => {
 };
 
 /**
- * Scribe v2 and MAI-Transcribe 2 take `diarize` beside the model, and list words only when
- * asked for speakers or word times. Only Scribe v2 fetches an address.
+ * Scribe v2, MAI-Transcribe 2 and Qwen3 ASR list words only when asked for word times or
+ * speakers. The first two take `diarize` beside the model. Only Scribe v2 fetches an address.
  */
-const topLevelDiarize: Body = async ({ model, speakers, audio }) => {
+const wordTimes: Body = async ({ model, speakers, audio }) => {
 	if ("url" in audio) {
 		return {
 			model: model.id,
@@ -70,6 +73,16 @@ const topLevelDiarize: Body = async ({ model, speakers, audio }) => {
 	form.append("response_format", "verbose_json");
 	form.append("timestamp_granularities[]", "word");
 	if (speakers) form.append("diarize", "true");
+	return form;
+};
+
+/** Voxtral refuses a request for word times with a 400, and times its segments unasked. */
+const segmentTimes: Body = async ({ model, audio }) => {
+	if ("url" in audio) throw new Error("Voxtral takes no audio address.");
+	const form = new FormData();
+	form.append("model", model.id);
+	form.append("file", audio.file);
+	form.append("response_format", "verbose_json");
 	return form;
 };
 
@@ -91,7 +104,7 @@ const MODELS: NonEmpty<ModelProfile & { readonly body: Body }> = [
 		...PART_CAPS,
 		// Its reel heard 4 voices on a show with 10.
 		mergeSpeakers: false,
-		body: topLevelDiarize,
+		body: wordTimes,
 	},
 	{
 		id: "microsoft/mai-transcribe-2",
@@ -100,7 +113,23 @@ const MODELS: NonEmpty<ModelProfile & { readonly body: Body }> = [
 		url: false,
 		...PART_CAPS,
 		mergeSpeakers: false,
-		body: topLevelDiarize,
+		body: wordTimes,
+	},
+	{
+		id: "mistralai/voxtral-mini-transcribe-3-0",
+		label: "Voxtral Mini Transcribe 3",
+		speakers: false,
+		url: false,
+		...SLOW_PART_CAPS,
+		body: segmentTimes,
+	},
+	{
+		id: "qwen/qwen3-asr-1.7b",
+		label: "Qwen3 ASR 1.7B",
+		speakers: false,
+		url: false,
+		...SLOW_PART_CAPS,
+		body: wordTimes,
 	},
 ];
 
@@ -157,28 +186,67 @@ export const openrouter: Provider = {
 	},
 };
 
+/** Words when the answer lists them, else its segments. An answer with neither holds no speech. */
 function parse(answer: unknown): PartTranscript {
-	const words = isPlainObject(answer) ? answer.words : undefined;
-	if (!Array.isArray(words)) return { words: [] };
+	if (!isPlainObject(answer)) return { words: [] };
+	const { words, segments } = answer;
+	if (!Array.isArray(words)) {
+		return { segments: Array.isArray(segments) ? segments.flatMap(segmentOf) : [] };
+	}
 	return {
-		words: words.flatMap((item: unknown): Word[] => {
-			// Scribe v2 also lists sounds, such as "[gentle music]", as `audio_event` items.
-			if (!isPlainObject(item) || (item.type ?? "word") !== "word") return [];
-			const { word: text, start, end, speaker } = item;
-			if (typeof text !== "string" || typeof start !== "number" || typeof end !== "number") {
-				return [];
-			}
-			return [
-				{
-					text,
-					start,
-					end,
-					speaker:
-						typeof speaker === "number" || typeof speaker === "string"
-							? `${speaker}`
-							: undefined,
-				},
-			];
-		}),
+		words: punctuated(
+			words.flatMap((item: unknown): Word[] => {
+				// Scribe v2 also lists sounds, such as "[gentle music]", as `audio_event` items.
+				if (!isPlainObject(item) || (item.type ?? "word") !== "word") return [];
+				const { word: text, start, end, speaker } = item;
+				if (
+					typeof text !== "string" ||
+					typeof start !== "number" ||
+					typeof end !== "number"
+				) {
+					return [];
+				}
+				return [
+					{
+						text,
+						start,
+						end,
+						speaker:
+							typeof speaker === "number" || typeof speaker === "string"
+								? `${speaker}`
+								: undefined,
+					},
+				];
+			}),
+			answer.text,
+		),
 	};
+}
+
+/**
+ * Qwen3 ASR lists its words without punctuation and keeps the punctuation in `text`, so
+ * each word takes its token from `text` when the two spell it alike.
+ */
+function punctuated(words: Word[], text: unknown): Word[] {
+	if (typeof text !== "string" || words.some((word) => /[.,?!]/.test(word.text))) return words;
+	const tokens = text.split(/\s+/).filter(Boolean);
+	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
+	let next = 0;
+	return words.map((word) => {
+		// A few tokens of lookahead get past a word `text` spells differently.
+		for (let index = next; index < Math.min(tokens.length, next + 3); index++) {
+			if (bare(tokens[index]) !== bare(word.text)) continue;
+			next = index + 1;
+			return { ...word, text: tokens[index] };
+		}
+		return word;
+	});
+}
+
+function segmentOf(item: unknown): Segment[] {
+	if (!isPlainObject(item)) return [];
+	const { text, start, end } = item;
+	return typeof text === "string" && typeof start === "number" && typeof end === "number"
+		? [{ text, start, end }]
+		: [];
 }
