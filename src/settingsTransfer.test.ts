@@ -216,12 +216,14 @@ describe("serializeSettings", () => {
 			deepgramSecretId: "podnotes-deepgram-api-key",
 			elevenLabsSecretId: "podnotes-elevenlabs-api-key",
 			openRouterSecretId: "podnotes-openrouter-api-key",
+			openAICompatibleSecretId: "podnotes-openai-compatible-api-key",
 		});
 		const secrets = {
 			openAI: "sk-secret",
 			deepgram: "dg-secret",
 			elevenLabs: "el-secret",
 			openRouter: "or-secret",
+			openAICompatible: "server-secret",
 		};
 
 		const without = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
@@ -229,6 +231,7 @@ describe("serializeSettings", () => {
 		expect(without.settings).not.toHaveProperty("deepgramSecretId");
 		expect(without.settings).not.toHaveProperty("elevenLabsSecretId");
 		expect(without.settings).not.toHaveProperty("openRouterSecretId");
+		expect(without.settings).not.toHaveProperty("openAICompatibleSecretId");
 
 		const withKeys = serializeSettings(settings, { secrets }, "2.16.0", NOW, new Map());
 		expect(withKeys.version).toBe(2);
@@ -611,7 +614,13 @@ describe("parseImport", () => {
 				type: SETTINGS_EXPORT_TYPE,
 				version: 2,
 				settings: { defaultVolume: 0.5, openAISecretId: "not-transferable" },
-				secrets: { openAI: " sk ", deepgram: "dg", elevenLabs: "el", openRouter: "or" },
+				secrets: {
+					openAI: " sk ",
+					deepgram: "dg",
+					elevenLabs: "el",
+					openRouter: "or",
+					openAICompatible: "server",
+				},
 			}),
 		);
 
@@ -623,6 +632,7 @@ describe("parseImport", () => {
 				deepgram: "dg",
 				elevenLabs: "el",
 				openRouter: "or",
+				openAICompatible: "server",
 			});
 		}
 	});
@@ -908,6 +918,7 @@ describe("the transcription provider in a settings file", () => {
 			template: released2240.transcript.template,
 			provider: "deepgram",
 			model: "nova-3",
+			serverUrl: "",
 			diarization: {
 				enabled: true,
 				provider: "deepgram",
@@ -931,6 +942,22 @@ describe("the transcription provider in a settings file", () => {
 		expect([transcript.provider, transcript.model]).toEqual([
 			"assemblyai",
 			"universal-3-6-pro",
+		]);
+	});
+
+	it("carries an OpenAI-compatible server's address and model to the library that imports it", () => {
+		const settings = makeSettings();
+		settings.transcript.provider = "openai-compatible";
+		settings.transcript.model = "whisper-large-v3-turbo";
+		settings.transcript.serverUrl = "http://192.168.1.20:8000/v1";
+		const file = JSON.stringify(serializeSettings(settings, {}, "2.25.0", NOW, new Map()));
+
+		const { transcript } = imported(makeSettings(), file);
+
+		expect([transcript.provider, transcript.model, transcript.serverUrl]).toEqual([
+			"openai-compatible",
+			"whisper-large-v3-turbo",
+			"http://192.168.1.20:8000/v1",
 		]);
 	});
 
@@ -999,12 +1026,19 @@ describe("describeSecrets (#168)", () => {
 		expect(describeSecrets({ openAI: "sk" })).toEqual(["OpenAI API key"]);
 		expect(describeSecrets({ deepgram: "dg" })).toEqual(["Deepgram API key"]);
 		expect(
-			describeSecrets({ openAI: "sk", deepgram: "dg", elevenLabs: "el", openRouter: "or" }),
+			describeSecrets({
+				openAI: "sk",
+				deepgram: "dg",
+				elevenLabs: "el",
+				openRouter: "or",
+				openAICompatible: "server",
+			}),
 		).toEqual([
 			"OpenAI API key",
 			"Deepgram API key",
 			"ElevenLabs API key",
 			"OpenRouter API key",
+			"OpenAI-compatible server API key",
 		]);
 	});
 

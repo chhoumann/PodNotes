@@ -33,18 +33,24 @@ export interface Word {
 	readonly speaker?: string;
 }
 
-/** What one request gave back: timed words, or text from a model that returns no times. */
+/**
+ * What one request gave back: timed words, or text from a model that returns no times. A
+ * model that times only its segments gives each segment as one word.
+ */
 export type PartTranscript = { readonly words: readonly Word[] } | { readonly text: string };
 
 export type AudioInput = { readonly url: PublicAudioUrl } | { readonly file: File };
 
 export interface PartInput {
+	/** Empty when no key is selected for a provider with an `endpoint`, which may need none. */
 	readonly apiKey: string;
 	readonly model: ModelProfile;
 	/** Label who spoke. Only ever true for a model whose profile says `speakers`. */
 	readonly speakers: boolean;
 	/** A `url` only for a model whose profile says `url`. */
 	readonly audio: AudioInput;
+	/** Where requests go, for a provider with an `endpoint`. */
+	readonly endpoint?: string;
 }
 
 export interface ProviderRequest {
@@ -62,7 +68,10 @@ export type Listing = ReadonlyMap<string, string | undefined>;
 
 /** Everything that is one provider's own: its models, its request and how to read its answers. */
 export interface Provider {
-	/** Best first. The first is the one PodNotes recommends. */
+	/**
+	 * Best first. The first is the one PodNotes recommends. For a provider with an
+	 * `endpoint`, the one profile says what PodNotes takes the model the user names to do.
+	 */
 	readonly models: NonEmpty<ModelProfile>;
 	/** How long PodNotes waits for one answer. */
 	readonly timeoutMs: number;
@@ -71,4 +80,10 @@ export interface Provider {
 	failure?(status: number, body: unknown): FailureKind | undefined;
 	/** Reads which models the provider still serves. Rejects when it cannot tell. */
 	catalog?(): Promise<Listing>;
+	/**
+	 * Set for a server at an address the user enters, which may be on their own machine or
+	 * network, runs the model they name and may need no key. Gives the address requests go
+	 * to from the one entered, or undefined when that is no http(s) address.
+	 */
+	endpoint?(address: string): string | undefined;
 }

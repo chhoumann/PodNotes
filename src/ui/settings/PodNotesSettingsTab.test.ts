@@ -192,10 +192,13 @@ describe("sections", () => {
 				"Transcripts",
 				[
 					"Transcription provider",
+					"Server address",
 					"OpenAI API key",
 					"Deepgram API key",
 					"ElevenLabs API key",
 					"OpenRouter API key",
+					"OpenAI-compatible server API key",
+					"Model",
 					"Model",
 					"Speaker labels",
 					"Speaker label format",
@@ -338,6 +341,7 @@ describe("Transcripts", () => {
 			["deepgram", "Deepgram"],
 			["openrouter", "OpenRouter"],
 			["openai", "OpenAI"],
+			["openai-compatible", "OpenAI-compatible server"],
 		]);
 		expect(provider()).toHaveDisplayValue("OpenAI");
 		expect(keyButtons()).toEqual(["Link... OpenAI API key"]);
@@ -499,6 +503,96 @@ describe("Transcripts", () => {
 
 			expect(model()).toHaveDisplayValue("ElevenLabs Scribe v2, no longer offered");
 			expect(await writes()).toBe(0);
+		});
+	});
+
+	describe("OpenAI-compatible server", () => {
+		/** The names of the rows on screen from the Transcripts heading to the next, in order. */
+		const shownRows = (container: HTMLElement) => {
+			const rows = [...container.querySelectorAll<HTMLElement>(".setting-item")];
+			const start = rows.findIndex((row) => row.textContent === "Transcripts") + 1;
+			const end = rows.findIndex(
+				(row, index) => index >= start && row.classList.contains("setting-item-heading"),
+			);
+			return rows
+				.slice(start, end)
+				.filter((row) => row.style.display !== "none")
+				.map((row) => row.querySelector(".setting-item-name")?.textContent);
+		};
+		const textbox = (ui: ReturnType<typeof openTranscripts>["ui"], name: string) =>
+			ui.queryByRole<HTMLInputElement>("textbox", { name });
+
+		test("choosing it shows its address, optional key and model text rows, and saves what is typed", async () => {
+			fakeTypingTime();
+			try {
+				const { ui, provider, keyButtons, disk } = openTranscripts();
+				expect(textbox(ui, "Server address")).toBeNull();
+				expect(textbox(ui, "Model")).toBeNull();
+
+				choose(provider(), "openai-compatible");
+
+				expect(textbox(ui, "Server address")).toHaveAttribute(
+					"placeholder",
+					"http://localhost:8000/v1",
+				);
+				expect(keyButtons()).toEqual(["Link... OpenAI-compatible server API key"]);
+				expect(ui.queryByRole("combobox", { name: "Model" })).toBeNull();
+				type(textbox(ui, "Server address")!, "http://localhost:8000/v1");
+				type(textbox(ui, "Model")!, "whisper-large-v3-turbo");
+				vi.advanceTimersByTime(500);
+
+				expect((await disk()).transcript).toMatchObject({
+					provider: "openai-compatible",
+					serverUrl: "http://localhost:8000/v1",
+					model: "whisper-large-v3-turbo",
+				});
+
+				choose(provider(), "openai");
+
+				expect(textbox(ui, "Server address")).toBeNull();
+				expect(textbox(ui, "Model")).toBeNull();
+				expect(ui.getByRole("combobox", { name: "Model" })).toBeVisible();
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		test("its rows come in order: provider, address, key, model, then the shared rows", () => {
+			const { tab } = openTranscripts(transcript({ provider: "openai-compatible" }));
+
+			expect(shownRows(tab.containerEl)).toEqual([
+				"Transcription provider",
+				"Server address",
+				"OpenAI-compatible server API key",
+				"Model",
+				"Speaker labels",
+				"Speaker label format",
+				"Transcript path",
+				"Transcript template",
+			]);
+		});
+
+		test("an address without http:// or https:// says so under the field", () => {
+			const { ui } = openTranscripts(transcript({ provider: "openai-compatible" }));
+			const address = textbox(ui, "Server address")!;
+			const error = () =>
+				address.closest(".setting-item")?.querySelector(".setting-item-error")?.textContent;
+
+			enter(address, "localhost:8000/v1");
+			expect(error()).toBe("The address must start with http:// or https://.");
+
+			enter(address, "http://localhost:8000/v1");
+			expect(error()).toBeUndefined();
+		});
+
+		test("Speaker labels can only be turned off, as for any model without them", () => {
+			const { ui, speakerLabels } = openTranscripts(
+				transcript({ provider: "openai-compatible", ...withSpeakerLabels(false) }),
+			);
+
+			expect(speakerLabels()).not.toBeChecked();
+			expect(speakerLabels()).toBeDisabled();
+			expect(ui.getByText("OpenAI-compatible server does not label speakers.")).toBeVisible();
 		});
 	});
 });

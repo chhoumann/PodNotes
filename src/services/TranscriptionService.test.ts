@@ -1847,6 +1847,328 @@ describe("TranscriptionService", () => {
 			}
 		});
 	});
+
+	describe("an OpenAI-compatible server transcript", () => {
+		const SERVER = "http://localhost:8000/v1";
+		const ENDPOINT = "http://localhost:8000/v1/audio/transcriptions";
+		const MODEL = "whisper-large-v3-turbo";
+		const audio = new Uint8Array(2048).map((_, index) => (index * 19) % 233);
+		const useServer = (
+			overrides: Partial<NonNullable<Parameters<typeof createMockPlugin>[0]>> = {},
+		) => {
+			getEpisodeAudioBufferMock.mockResolvedValue({ buffer: audio.buffer, extension: "mp3" });
+			return createMockPlugin({
+				provider: "openai-compatible",
+				serverUrl: SERVER,
+				model: MODEL,
+				openAIKey: "",
+				...overrides,
+			});
+		};
+		/** OpenAI's verbose_json, with word and segment times. */
+		const verbose = {
+			task: "transcribe",
+			language: "english",
+			duration: 11,
+			text: "Hello there. Hi!",
+			words: [
+				{ word: "Hello", start: 1.2, end: 1.5 },
+				{ word: "there.", start: 1.5, end: 1.9 },
+				{ word: "Hi!", start: 10.16, end: 10.5 },
+			],
+			segments: [
+				{ id: 0, start: 1, end: 1.9, text: " Hello there." },
+				{ id: 1, start: 10, end: 10.5, text: " Hi!" },
+			],
+		};
+		/** What OpenAI's gpt-transcribe answers when asked for verbose_json. */
+		const verboseRefused = () =>
+			Response.json(
+				{
+					error: {
+						message:
+							"response_format 'verbose_json' is not compatible with model 'gpt-transcribe'. Use 'json' or 'text' instead.",
+						type: "invalid_request_error",
+						param: "response_format",
+						code: "unsupported_value",
+					},
+				},
+				{ status: 400 },
+			);
+		const link = (time: string) =>
+			`obsidian://podnotes?episodeName=Test%20Episode&url=https%3A%2F%2Fexample.com%2Ffeed.xml&time=${time}`;
+		const timedNote =
+			`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there.\n\n` +
+			`[00:00:10](${link("10.16")}) Hi!`;
+		/** Each field of a request's form, with the file as its bytes. */
+		const fields = async (request: RequestUrlParam) =>
+			Promise.all(
+				[...(await sentForm(request))].map(async ([name, value]) => [
+					name,
+					typeof value === "string" ? value : new Uint8Array(await value.arrayBuffer()),
+				]),
+			);
+		const responseFormat = async (request: RequestUrlParam) =>
+			(await sentForm(request)).get("response_format");
+
+		test("sends one multipart request for word and segment times with the key, and times each paragraph", async () => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+			const plugin = useServer({ openAICompatibleKey: "server-key" });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock).toHaveBeenCalledOnce();
+			const [request] = providerMock.mock.calls[0];
+			expect(request.url).toBe(ENDPOINT);
+			expect(request.method).toBe("POST");
+			expect(request.headers).toEqual({ Authorization: "Bearer server-key" });
+			expect(await fields(request)).toEqual([
+				["model", MODEL],
+				["file", audio],
+				["response_format", "verbose_json"],
+				["timestamp_granularities[]", "word"],
+				["timestamp_granularities[]", "segment"],
+			]);
+			expect(savedNote(plugin)).toBe(timedNote);
+		});
+
+		test("with no key selected, runs and sends no Authorization header", async () => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock).toHaveBeenCalledOnce();
+			expect(providerMock.mock.calls[0][0].headers).toEqual({});
+		});
+
+		test.each([
+			"https://api.groq.com/openai/v1",
+			"https://api.groq.com/openai/v1//",
+			"  https://api.groq.com/openai/v1/audio/transcriptions/ ",
+		])("the address %j sends to the server's transcriptions endpoint", async (serverUrl) => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+
+			await transcribe(useServer({ serverUrl }));
+
+			expect(providerMock.mock.calls.map(([request]) => request.url)).toEqual([
+				"https://api.groq.com/openai/v1/audio/transcriptions",
+			]);
+		});
+
+		test.each([
+			"http://localhost:8000/v1",
+			"http://127.0.0.1:8080/v1",
+			"http://192.168.1.20:9000/v1",
+		])("a server on this machine or a private network at %s is reached", async (serverUrl) => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+			const plugin = useServer({ serverUrl });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock.mock.calls.map(([request]) => request.url)).toEqual([
+				`${serverUrl}/audio/transcriptions`,
+			]);
+		});
+
+		test("a server that refuses verbose_json is asked once more for json, and the note is untimed", async () => {
+			providerMock.mockImplementation(async (request) =>
+				(await responseFormat(request)) === "verbose_json"
+					? verboseRefused()
+					: Response.json({ text: "Hello there. Hi!" }),
+			);
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock).toHaveBeenCalledTimes(2);
+			const [, retry] = providerMock.mock.calls.map(([request]) => request);
+			expect(await fields(retry)).toEqual([
+				["model", MODEL],
+				["file", audio],
+				["response_format", "json"],
+			]);
+			expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
+		});
+
+		test("a server that refuses json too is not asked a third time", async () => {
+			providerMock.mockImplementation(async () => verboseRefused());
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Transcription failed: OpenAI-compatible server did not answer in a format PodNotes reads.",
+			);
+			expect(providerMock).toHaveBeenCalledTimes(2);
+		});
+
+		test("a 400 about anything else is not sent again", async () => {
+			providerMock.mockImplementation(async () =>
+				Response.json(
+					{
+						error: {
+							message:
+								"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']",
+							type: "invalid_request_error",
+							param: "file",
+							code: null,
+						},
+					},
+					{ status: 400 },
+				),
+			);
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Transcription failed: OpenAI-compatible server could not transcribe this audio.",
+			);
+			expect(providerMock).toHaveBeenCalledOnce();
+		});
+
+		test.each([
+			["words", { text: verbose.text, words: verbose.words }, timedNote],
+			[
+				"segments and no words",
+				{ text: verbose.text, segments: verbose.segments },
+				`# Test Episode\n\n[00:00:01](${link("1")}) Hello there.\n\n` +
+					`[00:00:10](${link("10")}) Hi!`,
+			],
+			["text alone", { text: "Hello there. Hi!" }, "# Test Episode\n\nHello there. Hi!"],
+		])("an answer with %s is saved as its note", async (_answer, answer, note) => {
+			providerMock.mockImplementation(async () => Response.json(answer));
+			const plugin = useServer();
+
+			await transcribe(plugin);
+
+			expect(savedNote(plugin)).toBe(note);
+		});
+
+		test("with speaker labels on, saves the note without them and says so, as for any model without them", async () => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+			const plugin = useServer({ speakers: true });
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Saved without speaker labels, because OpenAI-compatible server does not label speakers. These providers do: ElevenLabs, Deepgram, OpenRouter.",
+			);
+			expect(sentText(providerMock.mock.calls[0][0])).not.toContain("diarize");
+			expect(savedNote(plugin)).toBe(timedNote);
+		});
+
+		test.each([
+			[
+				"Transcribe current episode",
+				(service: TranscriptionService) => service.transcribeCurrentEpisode(),
+			],
+			[
+				"Transcribe current episode from audio",
+				(service: TranscriptionService) => service.transcribeCurrentEpisodeFromAudio(),
+			],
+		])("%s asks for a model when none is entered, and sends nothing", async (_command, run) => {
+			const plugin = useServer({ model: "  " });
+
+			await run(new TranscriptionService(plugin));
+
+			expect(noticeMessages).toEqual([
+				"Enter a model for your OpenAI-compatible server in the transcript settings.",
+			]);
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(providerMock).not.toHaveBeenCalled();
+		});
+
+		test.each(["", "localhost:8000/v1", "ftp://files.example.com/v1"])(
+			"asks for an http(s) address in place of %j, and sends nothing",
+			async (serverUrl) => {
+				const plugin = useServer({ serverUrl });
+
+				new TranscriptionService(plugin).transcribeCurrentEpisodeFromAudio();
+
+				expect(noticeMessages).toEqual([
+					"Enter the address of your OpenAI-compatible server, starting with http:// or https://, in the transcript settings.",
+				]);
+				expect(providerMock).not.toHaveBeenCalled();
+			},
+		);
+
+		test("a selected key that is not on this device stops the job instead of sending without it", async () => {
+			const plugin = useServer({
+				openAICompatibleSecretId: "podnotes-openai-compatible-api-key",
+			});
+
+			new TranscriptionService(plugin).transcribeCurrentEpisodeFromAudio();
+
+			expect(noticeMessages).toEqual([
+				"The selected OpenAI-compatible server API key is not available on this device. Select or create it in the transcript settings.",
+			]);
+			expect(providerMock).not.toHaveBeenCalled();
+		});
+
+		test.each([
+			[
+				"a rejected key",
+				async () =>
+					Response.json({ error: { message: "Invalid API Key" } }, { status: 401 }),
+				"The server at localhost:8000 rejected the API key. Check it in the transcript settings.",
+			],
+			[
+				"no such address or model",
+				async () => new Response("Not Found", { status: 404 }),
+				`The server at localhost:8000 has no ${MODEL} model at that address. Check the address and the model in the transcript settings.`,
+			],
+			[
+				"no answer",
+				() => Promise.reject(new TypeError("net::ERR_CONNECTION_REFUSED")),
+				"PodNotes could not reach the server at localhost:8000. Check the address in the transcript settings.",
+			],
+		])("%s says what to check, in PodNotes' words", async (_failure, answer, sentence) => {
+			providerMock.mockImplementation(answer);
+
+			await expect(
+				finalNotice(useServer({ openAICompatibleKey: "server-key" })),
+			).resolves.toBe(`Transcription failed: ${sentence}`);
+		});
+
+		test.each([
+			["a public feed's", publicFeed, () => publicFeed.url],
+			[
+				"a private feed's",
+				{
+					...publicFeed,
+					url: privateFeedPlaceholder("Test Podcast"),
+					urlSecretId: "podnotes-feed-url-1",
+				},
+				() => "https://private.example.com/feed/SUBSCRIBER-TOKEN.rss",
+			],
+		])(
+			"%s episode is uploaded to a local server, and no request holds its address",
+			async (_feed, feed, resolveUrl) => {
+				providerMock.mockImplementation(async () => Response.json(verbose));
+				const episode: Episode = {
+					...mockEpisode,
+					streamUrl: "https://cdn.example.com/SUBSCRIBER-TOKEN/episode.mp3",
+					feedUrl: feed.url,
+				};
+				const plugin = useServer({
+					feeds: savedFeedRepository(feed, [episode], resolveUrl),
+				});
+
+				await transcribe(plugin, episode);
+
+				expect(providerMock).toHaveBeenCalledOnce();
+				const [request] = providerMock.mock.calls[0];
+				expect(request.url).toBe(ENDPOINT);
+				expect((await fields(request)).find(([name]) => name === "file")).toEqual([
+					"file",
+					audio,
+				]);
+				for (const secret of [
+					"SUBSCRIBER-TOKEN",
+					"cdn.example.com",
+					"private.example.com",
+				]) {
+					expect(sentText(request)).not.toContain(secret);
+				}
+			},
+		);
+	});
 });
 
 function sumOf(numbers: readonly number[]): number {

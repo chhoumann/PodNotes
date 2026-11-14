@@ -8,6 +8,11 @@ export const CREDENTIALS = {
 	deepgram: { settingsKey: "deepgramSecretId", exportKey: "deepgram", label: "Deepgram" },
 	elevenlabs: { settingsKey: "elevenLabsSecretId", exportKey: "elevenLabs", label: "ElevenLabs" },
 	openrouter: { settingsKey: "openRouterSecretId", exportKey: "openRouter", label: "OpenRouter" },
+	"openai-compatible": {
+		settingsKey: "openAICompatibleSecretId",
+		exportKey: "openAICompatible",
+		label: "OpenAI-compatible server",
+	},
 } as const;
 
 export type CredentialKind = keyof typeof CREDENTIALS;

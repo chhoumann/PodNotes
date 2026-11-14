@@ -350,11 +350,38 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			]),
 			group("Transcripts", [
 				this.providerRow(),
+				{
+					...this.textRow("Server address", {
+						...this.text((settings) => settings.transcript, "serverUrl"),
+						placeholder: "http://localhost:8000/v1",
+						preview: (value, setting) => {
+							const { server } = transcriptionChoice({
+								transcript: {
+									...this.plugin.settings.transcript,
+									serverUrl: value,
+								},
+							});
+							setting.setErrorMessage(
+								value.trim() && server && !server.endpoint
+									? "The address must start with http:// or https://."
+									: null,
+							);
+						},
+					}),
+					visible: () => this.onServer(),
+				},
 				...CREDENTIAL_KINDS.map((kind) => ({
 					...this.secretRow(kind),
 					visible: () => transcriptionChoice(this.plugin.settings).provider === kind,
 				})),
 				this.modelRow(),
+				{
+					...this.textRow(
+						"Model",
+						this.text((settings) => settings.transcript, "model"),
+					),
+					visible: () => this.onServer(),
+				},
 				this.speakerLabelsRow(),
 				{
 					...this.textRow(
@@ -676,10 +703,18 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 	}
 
+	/** The provider is a server at an address the user enters, running the model they name. */
+	private onServer(): boolean {
+		return transcriptionChoice(this.plugin.settings).server !== undefined;
+	}
+
 	private modelRow(): SettingDefinitionRender {
 		return {
 			name: "Model",
-			visible: () => transcriptionChoice(this.plugin.settings).provider !== undefined,
+			visible: () => {
+				const { provider, server } = transcriptionChoice(this.plugin.settings);
+				return provider !== undefined && !server;
+			},
 			render: (setting) => {
 				const stops: (() => void)[] = [];
 				setting.addDropdown((dropdown) => {
@@ -689,7 +724,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					});
 					const draw = (settings: IPodNotesSettings) => {
 						const choice = transcriptionChoice(settings);
-						if (choice.provider === undefined) return;
+						if (choice.provider === undefined || choice.server) return;
 						void refreshModels(choice.provider);
 						const models = offeredModels(choice.provider);
 						const name = ({ label, ends }: { label: string; ends?: string }) =>
