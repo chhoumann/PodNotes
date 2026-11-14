@@ -1224,6 +1224,7 @@ describe("TranscriptionService", () => {
 	describe("an OpenRouter transcript", () => {
 		const TRANSCRIPTIONS = "https://openrouter.ai/api/v1/audio/transcriptions";
 		const CATALOG = "https://openrouter.ai/api/v1/models?output_modalities=transcription";
+		const HOUR_MS = 60 * 60 * 1000;
 		const audio = new Uint8Array(2048).map((_, index) => (index * 13) % 241);
 		const useOpenRouter = (
 			overrides: { model?: string; speakers?: boolean; feeds?: FeedRepository } = {},
@@ -1282,12 +1283,18 @@ describe("TranscriptionService", () => {
 			providerMock.mock.calls
 				.map(([request]) => request)
 				.filter(({ url }) => url === TRANSCRIPTIONS);
+		const catalogReads = () =>
+			providerMock.mock.calls.filter(([request]) => request.url === CATALOG).length;
 		const sentJson = (request: RequestUrlParam) =>
 			JSON.parse(new TextDecoder().decode(sentBytes(request)));
 		const fields = async (request: RequestUrlParam) =>
 			Object.fromEntries(
 				[...(await sentForm(request))].filter(([, value]) => typeof value === "string"),
 			);
+		const sentModel = async (request: RequestUrlParam) =>
+			request.contentType === "application/json"
+				? sentJson(request).model
+				: (await sentForm(request)).get("model");
 		const link = (time: string) =>
 			`obsidian://podnotes?episodeName=Test%20Episode&url=https%3A%2F%2Fexample.com%2Ffeed.xml&time=${time}`;
 		const labeled = `# Test Episode\n\n[00:00:01](${link("1.2")}) **1:** Hello there.\n\n[00:00:10](${link("10.16")}) **2:** Hi!`;
@@ -1493,6 +1500,77 @@ describe("TranscriptionService", () => {
 				expect(plugin.app.vault.create).not.toHaveBeenCalled();
 			},
 		);
+
+		test("a chosen model the catalog no longer lists runs the recommended one, and the notice says so", async () => {
+			openRouter(
+				undefined,
+				catalog({ "x-ai/grok-stt-2.0": null, "microsoft/mai-transcribe-2": null }),
+			);
+			const plugin = useOpenRouter({ model: "elevenlabs/scribe-v2" });
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"OpenRouter no longer offers ElevenLabs Scribe v2, so PodNotes used Grok STT 2.0.",
+			);
+
+			expect(await Promise.all(sent().map(sentModel))).toEqual(["x-ai/grok-stt-2.0"]);
+		});
+
+		test("a model whose end date has come is skipped, and the next one is recommended", async () => {
+			const today = new Date().toISOString().slice(0, 10);
+			openRouter(
+				undefined,
+				catalog({
+					"x-ai/grok-stt-2.0": today,
+					"elevenlabs/scribe-v2": null,
+					"microsoft/mai-transcribe-2": null,
+				}),
+			);
+			const plugin = useOpenRouter();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(await Promise.all(sent().map(sentModel))).toEqual(["elevenlabs/scribe-v2"]);
+		});
+
+		test("a catalog that cannot be read leaves every model offered, and the next job reads it again", async () => {
+			let reads = 0;
+			providerMock.mockImplementation(async (request) => {
+				if (request.url !== CATALOG) return Response.json(answers);
+				return ++reads === 1
+					? new Response("", { status: 503 })
+					: Response.json(catalog({ "x-ai/grok-stt-2.0": null }));
+			});
+			const plugin = useOpenRouter({ model: "elevenlabs/scribe-v2" });
+
+			await transcribe(plugin);
+			await transcribe(plugin);
+
+			expect(reads).toBe(2);
+			expect(await Promise.all(sent().map(sentModel))).toEqual([
+				"elevenlabs/scribe-v2",
+				"x-ai/grok-stt-2.0",
+			]);
+		});
+
+		test("the catalog is read again only once a day has passed", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				openRouter();
+				const plugin = useOpenRouter();
+
+				await transcribe(plugin);
+				vi.setSystemTime(Date.now() + 23 * HOUR_MS);
+				await transcribe(plugin);
+				expect(catalogReads()).toBe(1);
+
+				vi.setSystemTime(Date.now() + 2 * HOUR_MS);
+				await transcribe(plugin);
+				expect(catalogReads()).toBe(2);
+				expect(sent()).toHaveLength(3);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
 	});
 });
 

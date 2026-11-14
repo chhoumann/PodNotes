@@ -106,6 +106,11 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 			`This version of PodNotes has no ${choice.unknownModel} model, so ${choice.label} used ${model.label}.`,
 		);
 	}
+	if (choice.withdrawnModel) {
+		warnings.push(
+			`${choice.label} no longer offers ${choice.withdrawnModel.label}, so PodNotes used ${model.label}.`,
+		);
+	}
 	if (choice.speakers && !model.speakers) {
 		warnings.push(
 			`Saved without speaker labels, because ${choice.label} does not label speakers. These providers do: ${providersWithSpeakers().join(", ")}.`,

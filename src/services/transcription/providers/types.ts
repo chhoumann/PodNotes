@@ -51,6 +51,9 @@ export interface ProviderRequest {
 /** POSTs one request and resolves with the JSON of a 2xx answer. Rejects with a TranscriptionError. */
 export type Send = (request: ProviderRequest) => Promise<unknown>;
 
+/** The models a provider's live catalog lists, by ID, each with the day it ends (`YYYY-MM-DD`) if it has one. */
+export type Listing = ReadonlyMap<string, string | undefined>;
+
 /** Everything that is one provider's own: its models, its request and how to read its answers. */
 export interface Provider {
 	/** Best first. The first is the one PodNotes recommends. */
@@ -60,4 +63,6 @@ export interface Provider {
 	transcribe(input: PartInput, send: Send): Promise<PartTranscript>;
 	/** What a failed answer means here, when the status alone does not say. `body` is the answer's JSON. */
 	failure?(status: number, body: unknown): FailureKind | undefined;
+	/** Reads which models the provider still serves. Rejects when it cannot tell. */
+	catalog?(): Promise<Listing>;
 }

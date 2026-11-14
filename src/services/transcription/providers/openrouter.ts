@@ -1,7 +1,9 @@
 import { arrayBufferToBase64 } from "obsidian";
 import { isPlainObject } from "src/persistence/codecUtils";
 import type { NonEmpty } from "src/services/publishedTranscript/parse";
+import { fetchJsonWithTimeout } from "src/utility/networkRequest";
 import type {
+	Listing,
 	ModelProfile,
 	PartInput,
 	PartTranscript,
@@ -11,6 +13,7 @@ import type {
 } from "./types";
 
 const TRANSCRIPTIONS_URL = "https://openrouter.ai/api/v1/audio/transcriptions";
+const CATALOG_URL = "https://openrouter.ai/api/v1/models?output_modalities=transcription";
 
 /**
  * OpenRouter takes 25 MB a request and gives the model 60 s to answer. Parts of 24 MB and
@@ -124,6 +127,19 @@ export const openrouter: Provider = {
 		/data policy|zero data retention|\bzdr\b/i.test(body.error.message)
 			? "privacy"
 			: undefined,
+
+	async catalog() {
+		const answer = await fetchJsonWithTimeout<unknown>(CATALOG_URL, { timeoutMs: 15_000 });
+		const entries = isPlainObject(answer) ? answer.data : undefined;
+		if (!Array.isArray(entries)) throw new Error("OpenRouter's catalog lists no models.");
+		const listing: Map<string, string | undefined> = new Map();
+		for (const entry of entries) {
+			if (!isPlainObject(entry) || typeof entry.id !== "string") continue;
+			const ends = entry.expiration_date;
+			listing.set(entry.id, typeof ends === "string" ? ends.slice(0, 10) : undefined);
+		}
+		return listing satisfies Listing;
+	},
 };
 
 function parse(answer: unknown): PartTranscript {

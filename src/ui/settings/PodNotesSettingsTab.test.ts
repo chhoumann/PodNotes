@@ -10,12 +10,19 @@ import PodNotes from "src/main";
 import { decodePodNotesData } from "src/persistence/podNotesData";
 import { PlayerController } from "src/player/PlayerController";
 import { FeedUrlRepository } from "src/services/FeedUrlRepository";
+import { catalogs } from "src/services/transcription";
 import { episodeListLimit, plugin as pluginStore } from "src/store";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { PodNotesSettingsTab } from "./PodNotesSettingsTab";
 import { attachDataFileWriter, dataFileText } from "../../../tests/mocks/dataFileWriter";
 import { FakeDocument } from "../../../tests/mocks/fakeMedia";
 import { fakeQuickAdd, unusableQuickAdd } from "../../../tests/mocks/quickAdd";
+import { providerMock } from "../../../tests/mocks/providerRequestUrl";
+
+vi.mock("obsidian", async (importOriginal) => ({
+	...(await importOriginal<typeof import("obsidian")>()),
+	requestUrl: (await import("../../../tests/mocks/providerRequestUrl")).providerRequestUrl,
+}));
 
 const openTabs = new Set<PodNotesSettingsTab>();
 
@@ -29,6 +36,8 @@ afterEach(() => {
 		tab.containerEl.remove();
 	}
 	openTabs.clear();
+	providerMock.mockReset();
+	catalogs.set(new Map());
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 	pluginStore.set(undefined as never);
@@ -436,6 +445,20 @@ describe("Transcripts", () => {
 	});
 
 	describe("OpenRouter", () => {
+		const CATALOG = "https://openrouter.ai/api/v1/models?output_modalities=transcription";
+		/** Answers OpenRouter's catalog, listing each model with its end date or null. */
+		const listing = (models: Record<string, string | null>) =>
+			providerMock.mockImplementation(async (request) =>
+				request.url === CATALOG
+					? Response.json({
+							data: Object.entries(models).map(([id, expiration_date]) => ({
+								id,
+								expiration_date,
+							})),
+						})
+					: new Response("", { status: 404 }),
+			);
+
 		test("choosing it shows its API key row and its three models, Grok STT 2.0 recommended", async () => {
 			const { provider, model, keyButtons, disk } = openTranscripts();
 
@@ -451,6 +474,31 @@ describe("Transcripts", () => {
 			]);
 			expect(model()).toHaveDisplayValue("Recommended (Grok STT 2.0)");
 			expect((await disk()).transcript).toMatchObject({ provider: "openrouter", model: "" });
+		});
+
+		test("the catalog read as the row draws leaves out a model it does not list and dates one that ends", async () => {
+			listing({ "x-ai/grok-stt-2.0": "2099-01-31", "microsoft/mai-transcribe-2": null });
+			const { model } = openTranscripts(transcript({ provider: "openrouter" }));
+
+			await settled();
+
+			expect(options(model())).toEqual([
+				["", "Recommended (Grok STT 2.0, ends 2099-01-31)"],
+				["x-ai/grok-stt-2.0", "Grok STT 2.0, ends 2099-01-31"],
+				["microsoft/mai-transcribe-2", "MAI-Transcribe 2"],
+			]);
+		});
+
+		test("a chosen model the catalog no longer lists stays selected, marked as no longer offered", async () => {
+			listing({ "x-ai/grok-stt-2.0": null, "microsoft/mai-transcribe-2": null });
+			const { model, writes } = openTranscripts(
+				transcript({ provider: "openrouter", model: "elevenlabs/scribe-v2" }),
+			);
+
+			await settled();
+
+			expect(model()).toHaveDisplayValue("ElevenLabs Scribe v2, no longer offered");
+			expect(await writes()).toBe(0);
 		});
 	});
 });
