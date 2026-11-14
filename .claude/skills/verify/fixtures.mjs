@@ -16,6 +16,11 @@
 //                                                          episode whose media answers 404
 //   node .claude/skills/verify/fixtures.mjs retitle        rename the first feed's episodes, keeping their GUIDs, until the server stops
 //   node .claude/skills/verify/fixtures.mjs requests       print the paths the server has answered, oldest first
+//   node .claude/skills/verify/fixtures.mjs server         same server, print the address of its OpenAI-compatible
+//                                                          transcription route, which answers verbose_json. The model
+//                                                          "json-only" refuses verbose_json with a 400, as
+//                                                          gpt-transcribe does, and answers json
+//   node .claude/skills/verify/fixtures.mjs transcriptions print each request the transcription route answered, as JSON
 //   node .claude/skills/verify/fixtures.mjs audio [path]   write a 60 s WAV into this worktree's vault
 //                                                          (default path: "Fixtures/Local Fixture.wav")
 //   node .claude/skills/verify/fixtures.mjs stop           stop the feed server
@@ -41,6 +46,13 @@ const transcriptsUrl = `${base}/transcripts.xml`;
 const PRIVATE_ROUTE = "/feeds/verify-subscriber-token/feed.xml";
 const privateUrl = `http://${SUPERCAST_FIXTURE_HOST}:${port}${PRIVATE_ROUTE}`;
 const libraryUrl = `${base}/library.json`;
+const serverUrl = `${base}/v1`;
+const TRANSCRIPTIONS_ROUTE = "/v1/audio/transcriptions";
+const JSON_ONLY_MODEL = "json-only";
+const SPOKEN = [
+	"This text came from the fixture server.",
+	"A second sentence starts twelve seconds in.",
+];
 const local = `http://127.0.0.1:${port}`;
 const FEED_TITLE = "PodNotes Fixture";
 const FEED_B_TITLE = "PodNotes Fixture B";
@@ -538,6 +550,75 @@ function libraryManifest() {
 	};
 }
 
+/**
+ * Answers the OpenAI-compatible transcription route as a Whisper server does: verbose_json
+ * with a word every 0.4 s and the second sentence 12 s in, or json's text.
+ * @param {http.IncomingMessage} request @param {http.ServerResponse} response
+ * @param {object[]} transcriptions
+ */
+async function answerTranscription(request, response, transcriptions) {
+	/** @type {Buffer[]} */
+	const chunks = [];
+	for await (const chunk of request) chunks.push(chunk);
+	const form = await new Request(local, {
+		method: "POST",
+		headers: { "content-type": request.headers["content-type"] ?? "" },
+		body: Buffer.concat(chunks),
+	}).formData();
+	const file = form.get("file");
+	const model = form.get("model");
+	const format = form.get("response_format");
+	transcriptions.push({
+		authorization: request.headers.authorization ?? null,
+		model,
+		responseFormat: format,
+		timestampGranularities: form.getAll("timestamp_granularities[]"),
+		fileType: file instanceof Blob ? file.type : null,
+		fileBytes: file instanceof Blob ? file.size : 0,
+	});
+	/** @param {number} status @param {unknown} body */
+	const answer = (status, body) =>
+		response
+			.writeHead(status, { "Content-Type": "application/json" })
+			.end(JSON.stringify(body));
+	if (model === JSON_ONLY_MODEL && format === "verbose_json") {
+		answer(400, {
+			error: {
+				message: `response_format 'verbose_json' is not compatible with model '${JSON_ONLY_MODEL}'. Use 'json' or 'text' instead.`,
+				type: "invalid_request_error",
+				param: "response_format",
+				code: "unsupported_value",
+			},
+		});
+		return;
+	}
+	const text = SPOKEN.join(" ");
+	if (format !== "verbose_json") {
+		answer(200, { text });
+		return;
+	}
+	const timed = SPOKEN.map((sentence, index) =>
+		sentence.split(" ").map((word, at) => ({
+			word,
+			start: index * 12 + at * 0.4,
+			end: index * 12 + at * 0.4 + 0.3,
+		})),
+	);
+	answer(200, {
+		task: "transcribe",
+		language: "english",
+		duration: 15,
+		text,
+		words: timed.flat(),
+		segments: timed.map((words, id) => ({
+			id,
+			start: words[0].start,
+			end: words[words.length - 1].end,
+			text: ` ${SPOKEN[id]}`,
+		})),
+	});
+}
+
 function serve() {
 	const audio = wav();
 	/** @type {Record<string, [string, Buffer | Stream]>} */
@@ -614,6 +695,8 @@ function serve() {
 	}
 	/** @type {string[]} */
 	const requests = [];
+	/** @type {object[]} */
+	const transcriptions = [];
 	const server = http.createServer(async (request, response) => {
 		if (request.method === "POST" && request.url === "/__retitle") {
 			routes["/feed.xml"][1] = Buffer.from(feedXml(audio.length, FEED_TITLE, "", true));
@@ -630,8 +713,17 @@ function serve() {
 			response.end(JSON.stringify(requests));
 			return;
 		}
+		if (request.url === "/__transcriptions") {
+			response.writeHead(200, { "Content-Type": "application/json" });
+			response.end(JSON.stringify(transcriptions));
+			return;
+		}
 		const fromPodNotes = request.headers.host?.startsWith(host);
 		if (fromPodNotes) requests.push(`${request.method} ${request.url}`);
+		if (request.method === "POST" && request.url === TRANSCRIPTIONS_ROUTE) {
+			await answerTranscription(request, response, transcriptions);
+			return;
+		}
 		const url = request.url ?? "";
 		let route = routes[url];
 		if (!route && videos[url]) {
@@ -737,6 +829,15 @@ async function printRequests() {
 	for (const line of /** @type {string[]} */ (await response.json())) console.log(line);
 }
 
+async function printTranscriptions() {
+	const response = await fetch(`${local}/__transcriptions`, {
+		signal: AbortSignal.timeout(1000),
+	});
+	for (const entry of /** @type {object[]} */ (await response.json())) {
+		console.log(JSON.stringify(entry));
+	}
+}
+
 async function retitleFeed() {
 	const response = await fetch(`${local}/__retitle`, {
 		method: "POST",
@@ -764,11 +865,13 @@ try {
 	else if (verb === "library") await startFeed(libraryUrl);
 	else if (verb === "retitle") await retitleFeed();
 	else if (verb === "requests") await printRequests();
+	else if (verb === "server") await startFeed(serverUrl);
+	else if (verb === "transcriptions") await printTranscriptions();
 	else if (verb === "audio") await writeAudio(arg);
 	else if (verb === "stop") await stopFeed();
 	else
 		throw new Error(
-			"Usage: fixtures.mjs feed | feed-b | transcripts | private | library | retitle | requests | audio [vault-relative path] | stop",
+			"Usage: fixtures.mjs feed | feed-b | transcripts | private | library | retitle | requests | server | transcriptions | audio [vault-relative path] | stop",
 		);
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));

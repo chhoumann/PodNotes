@@ -148,12 +148,13 @@ describe("migrateTranscriptSettings", () => {
 		expect(migrateTranscriptSettings(null, false)).toEqual(expected);
 	});
 
-	it("keeps a stored provider, model and speaker settings as they are", () => {
+	it("keeps a stored provider, model, server address and speaker settings as they are", () => {
 		const stored = {
 			path: "t/{{title}}.md",
 			template: "{{transcript}}",
-			provider: "deepgram",
-			model: "nova-3",
+			provider: "openai-compatible",
+			model: "whisper-large-v3-turbo",
+			serverUrl: "http://localhost:8000/v1",
 			diarization: { enabled: true, speakerTemplate: "Speaker {{speaker}}: " },
 		};
 

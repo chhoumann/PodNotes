@@ -486,7 +486,7 @@ describe("TranscriptionService", () => {
 				await vi.advanceTimersByTimeAsync(60 * 60_000);
 
 				expect(String(setMessage.mock.calls.at(-1)?.[0])).toMatch(
-					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: ElevenLabs, Deepgram, OpenRouter\.$/,
+					/\n\nSaved without speaker labels, because GPT Transcribe does not label speakers\. These providers do: ElevenLabs, Deepgram, OpenRouter\.$/,
 				);
 				expect(hide).not.toHaveBeenCalled();
 				expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
@@ -1269,6 +1269,8 @@ describe("TranscriptionService", () => {
 			"x-ai/grok-stt-1.0": "2026-11-15",
 			"elevenlabs/scribe-v2": null,
 			"microsoft/mai-transcribe-2": null,
+			"mistralai/voxtral-mini-transcribe-3-0": null,
+			"qwen/qwen3-asr-1.7b": null,
 		});
 		/** Answers the catalog with `listed`, and each transcription request with `answer`. */
 		const openRouter = (
@@ -1483,6 +1485,144 @@ describe("TranscriptionService", () => {
 			const times = [...note.matchAll(/time=([\d.]+)\)/g)].map(([, time]) => time);
 			expect(times).toEqual(expected.map(String));
 			expect(note).toContain(`Part ${partBytes.length}.`);
+		});
+
+		describe("models without speaker labels", () => {
+			const VOXTRAL = "mistralai/voxtral-mini-transcribe-3-0";
+			const QWEN = "qwen/qwen3-asr-1.7b";
+			/** Voxtral's verbose_json: timed segments and no words. */
+			const segmentsAnswer = {
+				text: "Hello there. Hi!",
+				duration: 11,
+				segments: [
+					{ id: 0, start: 1.2, end: 1.9, text: " Hello there." },
+					{ id: 1, start: 10.16, end: 10.5, text: " Hi!" },
+				],
+			};
+			const wordsAnswer = {
+				...answers,
+				words: answers.words.map(({ speaker: _s, speaker_label: _l, ...rest }) => rest),
+			};
+
+			test.each([
+				[
+					VOXTRAL,
+					"Voxtral Mini Transcribe 3",
+					segmentsAnswer,
+					{ model: VOXTRAL, response_format: "verbose_json" },
+				],
+				[
+					QWEN,
+					"Qwen3 ASR 1.7B",
+					wordsAnswer,
+					{
+						model: QWEN,
+						response_format: "verbose_json",
+						"timestamp_granularities[]": "word",
+					},
+				],
+			])(
+				"%s gets the upload as its measured multipart request, and with speaker labels on the note is timed, unlabeled, and the notice says why",
+				async (model, label, answer, expected) => {
+					openRouter(() => Response.json(answer));
+					const plugin = useOpenRouter({
+						model,
+						feeds: savedFeedRepository(publicFeed, [mockEpisode]),
+					});
+
+					await expect(finalNotice(plugin)).resolves.toBe(
+						`Saved without speaker labels, because ${label} does not label speakers. These providers do: ElevenLabs, Deepgram, OpenRouter.`,
+					);
+
+					expect(sent()).toHaveLength(1);
+					const [request] = sent();
+					expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+					expect(await fields(request)).toEqual(expected);
+					expect(new Uint8Array(await (await sentFile(request)).arrayBuffer())).toEqual(
+						audio,
+					);
+					expect(savedNote(plugin)).toBe(unlabeled);
+				},
+			);
+
+			test("Qwen's words, which it lists without punctuation, take their punctuation from its text", async () => {
+				// Measured live: Qwen3 ASR keeps punctuation only in `text`.
+				openRouter(() =>
+					Response.json({
+						text: "Hello there. Uh, it's re-running now. Hi!",
+						duration: 11,
+						words: [
+							{ word: "Hello", start: 1.2, end: 1.5 },
+							{ word: "there", start: 1.5, end: 1.9 },
+							{ word: "Uh", start: 2, end: 2.2 },
+							{ word: "it's", start: 2.2, end: 2.5 },
+							{ word: "re", start: 2.5, end: 2.7 },
+							{ word: "running", start: 2.7, end: 3 },
+							{ word: "now", start: 3, end: 3.3 },
+							{ word: "Hi", start: 10.16, end: 10.5 },
+						],
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there. Uh, it's re running now.\n\n[00:00:10](${link("10.16")}) Hi!`,
+				);
+			});
+
+			test("Voxtral's segments from two parts of at most 900 s become paragraphs timed from the episode's start", async () => {
+				const stream = MP3_STREAMS.mpeg25At8Kbps;
+				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
+				getEpisodeAudioBufferMock.mockResolvedValue({
+					buffer: mp3Bytes(stream, Math.ceil(1500 / stream.frameSeconds)).buffer,
+					extension: "mp3",
+				});
+				const partBytes: number[] = [];
+				openRouter(async (request) => {
+					partBytes.push((await sentFile(request)).size);
+					const part = partBytes.length;
+					return Response.json({
+						text: `Part ${part} opens. Part ${part} ends.`,
+						segments: [
+							{ id: 0, start: 2.5, end: 6, text: ` Part ${part} opens.` },
+							{ id: 1, start: 40, end: 43.25, text: ` Part ${part} ends.` },
+						],
+					});
+				});
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(partBytes).toHaveLength(2);
+				for (const bytes of partBytes) {
+					expect(mp3Seconds(stream, bytes)).toBeLessThanOrEqual(900);
+				}
+				const second = mp3Seconds(stream, partBytes[0]);
+				const note = savedNote(plugin);
+				expect(
+					[...note.matchAll(/time=([\d.]+)\) (.+)$/gm)].map(([, t, s]) => [t, s]),
+				).toEqual([
+					["2.5", "Part 1 opens."],
+					["40", "Part 1 ends."],
+					[`${Math.round((second + 2.5) * 1000) / 1000}`, "Part 2 opens."],
+					[`${Math.round((second + 40) * 1000) / 1000}`, "Part 2 ends."],
+				]);
+			});
+
+			test("an answer with neither words nor segments writes no note", async () => {
+				openRouter(() => Response.json({ text: "Hello there.", duration: 11 }));
+				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription failed: OpenRouter found no speech in this episode.",
+				);
+
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			});
 		});
 
 		describe("speaker labels across the parts of an episode", () => {
@@ -1846,6 +1986,397 @@ describe("TranscriptionService", () => {
 				vi.useRealTimers();
 			}
 		});
+	});
+
+	describe("an OpenAI-compatible server transcript", () => {
+		const SERVER = "http://localhost:8000/v1";
+		const ENDPOINT = "http://localhost:8000/v1/audio/transcriptions";
+		const MODEL = "whisper-large-v3-turbo";
+		const audio = new Uint8Array(2048).map((_, index) => (index * 19) % 233);
+		const useServer = (
+			overrides: Partial<NonNullable<Parameters<typeof createMockPlugin>[0]>> = {},
+		) => {
+			getEpisodeAudioBufferMock.mockResolvedValue({ buffer: audio.buffer, extension: "mp3" });
+			return createMockPlugin({
+				provider: "openai-compatible",
+				serverUrl: SERVER,
+				model: MODEL,
+				openAIKey: "",
+				...overrides,
+			});
+		};
+		/** OpenAI's verbose_json, with word and segment times. */
+		const verbose = {
+			task: "transcribe",
+			language: "english",
+			duration: 11,
+			text: "Hello there. Hi!",
+			words: [
+				{ word: "Hello", start: 1.2, end: 1.5 },
+				{ word: "there.", start: 1.5, end: 1.9 },
+				{ word: "Hi!", start: 10.16, end: 10.5 },
+			],
+			segments: [
+				{ id: 0, start: 1, end: 1.9, text: " Hello there." },
+				{ id: 1, start: 10, end: 10.5, text: " Hi!" },
+			],
+		};
+		/** What OpenAI's gpt-transcribe answers when asked for verbose_json. */
+		const verboseRefused = () =>
+			Response.json(
+				{
+					error: {
+						message:
+							"response_format 'verbose_json' is not compatible with model 'gpt-transcribe'. Use 'json' or 'text' instead.",
+						type: "invalid_request_error",
+						param: "response_format",
+						code: "unsupported_value",
+					},
+				},
+				{ status: 400 },
+			);
+		const link = (time: string) =>
+			`obsidian://podnotes?episodeName=Test%20Episode&url=https%3A%2F%2Fexample.com%2Ffeed.xml&time=${time}`;
+		const timedNote =
+			`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there.\n\n` +
+			`[00:00:10](${link("10.16")}) Hi!`;
+		/** Each field of a request's form, with the file as its bytes. */
+		const fields = async (request: RequestUrlParam) =>
+			Promise.all(
+				[...(await sentForm(request))].map(async ([name, value]) => [
+					name,
+					typeof value === "string" ? value : new Uint8Array(await value.arrayBuffer()),
+				]),
+			);
+		const responseFormat = async (request: RequestUrlParam) =>
+			(await sentForm(request)).get("response_format");
+
+		test("sends one multipart request for word and segment times with the key, and times each paragraph", async () => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+			const plugin = useServer({ openAICompatibleKey: "server-key" });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock).toHaveBeenCalledOnce();
+			const [request] = providerMock.mock.calls[0];
+			expect(request.url).toBe(ENDPOINT);
+			expect(request.method).toBe("POST");
+			expect(request.headers).toEqual({ Authorization: "Bearer server-key" });
+			expect(await fields(request)).toEqual([
+				["model", MODEL],
+				["file", audio],
+				["response_format", "verbose_json"],
+				["timestamp_granularities[]", "word"],
+				["timestamp_granularities[]", "segment"],
+			]);
+			expect(savedNote(plugin)).toBe(timedNote);
+		});
+
+		test("joins a Whisper word list, whose words carry their own leading space, back into its words", async () => {
+			// Measured live: whisper-large-v3-turbo lists "sci-fi" as " sci" and "-fi".
+			providerMock.mockImplementation(async () =>
+				Response.json({
+					text: " only see sci-fi as cultural criticism. Hi!",
+					words: [
+						{ word: " only", start: 1.2, end: 1.4 },
+						{ word: " see", start: 1.4, end: 1.6 },
+						{ word: " sci", start: 1.6, end: 1.8 },
+						{ word: "-fi", start: 1.8, end: 2 },
+						{ word: " as", start: 2, end: 2.1 },
+						{ word: " cultural", start: 2.1, end: 2.5 },
+						{ word: " criticism.", start: 2.5, end: 3 },
+						{ word: " Hi!", start: 10.16, end: 10.5 },
+					],
+				}),
+			);
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) only see sci-fi as cultural criticism.\n\n` +
+					`[00:00:10](${link("10.16")}) Hi!`,
+			);
+		});
+
+		test("with no key selected, runs and sends no Authorization header", async () => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock).toHaveBeenCalledOnce();
+			expect(providerMock.mock.calls[0][0].headers).toEqual({});
+		});
+
+		test.each([
+			"https://api.groq.com/openai/v1",
+			"https://api.groq.com/openai/v1//",
+			"  https://api.groq.com/openai/v1/audio/transcriptions/ ",
+		])("the address %j sends to the server's transcriptions endpoint", async (serverUrl) => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+
+			await transcribe(useServer({ serverUrl }));
+
+			expect(providerMock.mock.calls.map(([request]) => request.url)).toEqual([
+				"https://api.groq.com/openai/v1/audio/transcriptions",
+			]);
+		});
+
+		test.each([
+			"http://localhost:8000/v1",
+			"http://127.0.0.1:8080/v1",
+			"http://192.168.1.20:9000/v1",
+		])("a server on this machine or a private network at %s is reached", async (serverUrl) => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+			const plugin = useServer({ serverUrl });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock.mock.calls.map(([request]) => request.url)).toEqual([
+				`${serverUrl}/audio/transcriptions`,
+			]);
+		});
+
+		test("a server that refuses verbose_json is asked once more for json, and the note is untimed", async () => {
+			providerMock.mockImplementation(async (request) =>
+				(await responseFormat(request)) === "verbose_json"
+					? verboseRefused()
+					: Response.json({ text: "Hello there. Hi!" }),
+			);
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(providerMock).toHaveBeenCalledTimes(2);
+			const [, retry] = providerMock.mock.calls.map(([request]) => request);
+			expect(await fields(retry)).toEqual([
+				["model", MODEL],
+				["file", audio],
+				["response_format", "json"],
+			]);
+			expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
+		});
+
+		test("a server that refuses json too is not asked a third time", async () => {
+			providerMock.mockImplementation(async () => verboseRefused());
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Transcription failed: OpenAI-compatible server did not answer in a format PodNotes reads.",
+			);
+			expect(providerMock).toHaveBeenCalledTimes(2);
+		});
+
+		test("after a server refuses verbose_json, the episode's next part is sent once, as json", async () => {
+			const plugin = useServer();
+			const stream = MP3_STREAMS.mpeg1At96Kbps;
+			const frames = Math.ceil(30_000_000 / stream.frameBytes);
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: mp3Bytes(stream, frames).buffer,
+				extension: "mp3",
+			});
+			providerMock.mockImplementation(async (request) =>
+				(await responseFormat(request)) === "verbose_json"
+					? verboseRefused()
+					: Response.json({ text: "Hello there." }),
+			);
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			const requests = providerMock.mock.calls.map(([request]) => request);
+			const formats = await Promise.all(requests.map(responseFormat));
+			const sizes = await Promise.all(
+				requests.map(async (request) => (await sentFile(request)).size),
+			);
+			expect(formats).toEqual(["verbose_json", "json", "json"]);
+			expect(sizes[1]).toBe(sizes[0]);
+			expect(sizes[1] + sizes[2]).toBe(frames * stream.frameBytes);
+		});
+
+		test("words a server lists without punctuation take their punctuation from its text", async () => {
+			providerMock.mockImplementation(async () =>
+				Response.json({
+					...verbose,
+					words: verbose.words.map((word) => ({
+						...word,
+						word: word.word.replace(/[.!]/, ""),
+					})),
+				}),
+			);
+			const plugin = useServer();
+
+			await transcribe(plugin);
+
+			expect(savedNote(plugin)).toBe(timedNote);
+		});
+
+		test("a 400 about anything else is not sent again", async () => {
+			providerMock.mockImplementation(async () =>
+				Response.json(
+					{
+						error: {
+							message:
+								"Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']",
+							type: "invalid_request_error",
+							param: "file",
+							code: null,
+						},
+					},
+					{ status: 400 },
+				),
+			);
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Transcription failed: OpenAI-compatible server could not transcribe this audio.",
+			);
+			expect(providerMock).toHaveBeenCalledOnce();
+		});
+
+		test.each([
+			["words", { text: verbose.text, words: verbose.words }, timedNote],
+			[
+				"segments and no words",
+				{ text: verbose.text, segments: verbose.segments },
+				`# Test Episode\n\n[00:00:01](${link("1")}) Hello there.\n\n` +
+					`[00:00:10](${link("10")}) Hi!`,
+			],
+			["text alone", { text: "Hello there. Hi!" }, "# Test Episode\n\nHello there. Hi!"],
+		])("an answer with %s is saved as its note", async (_answer, answer, note) => {
+			providerMock.mockImplementation(async () => Response.json(answer));
+			const plugin = useServer();
+
+			await transcribe(plugin);
+
+			expect(savedNote(plugin)).toBe(note);
+		});
+
+		test("with speaker labels on, saves the note without them and says so, as for any model without them", async () => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+			const plugin = useServer({ speakers: true });
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Saved without speaker labels, because OpenAI-compatible server does not label speakers. These providers do: ElevenLabs, Deepgram, OpenRouter.",
+			);
+			expect(sentText(providerMock.mock.calls[0][0])).not.toContain("diarize");
+			expect(savedNote(plugin)).toBe(timedNote);
+		});
+
+		test.each([
+			[
+				"Transcribe current episode",
+				(service: TranscriptionService) => service.transcribeCurrentEpisode(),
+			],
+			[
+				"Transcribe current episode from audio",
+				(service: TranscriptionService) => service.transcribeCurrentEpisodeFromAudio(),
+			],
+		])("%s asks for a model when none is entered, and sends nothing", async (_command, run) => {
+			const plugin = useServer({ model: "  " });
+
+			await run(new TranscriptionService(plugin));
+
+			expect(noticeMessages).toEqual([
+				"Enter a model for your OpenAI-compatible server in the transcript settings.",
+			]);
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(providerMock).not.toHaveBeenCalled();
+		});
+
+		test.each(["", "localhost:8000/v1", "ftp://files.example.com/v1"])(
+			"asks for an http(s) address in place of %j, and sends nothing",
+			async (serverUrl) => {
+				const plugin = useServer({ serverUrl });
+
+				new TranscriptionService(plugin).transcribeCurrentEpisodeFromAudio();
+
+				expect(noticeMessages).toEqual([
+					"Enter the address of your OpenAI-compatible server, starting with http:// or https://, in the transcript settings.",
+				]);
+				expect(providerMock).not.toHaveBeenCalled();
+			},
+		);
+
+		test("a selected key that is not on this device stops the job instead of sending without it", async () => {
+			const plugin = useServer({
+				openAICompatibleSecretId: "podnotes-openai-compatible-api-key",
+			});
+
+			new TranscriptionService(plugin).transcribeCurrentEpisodeFromAudio();
+
+			expect(noticeMessages).toEqual([
+				"The selected OpenAI-compatible server API key is not available on this device. Select or create it in the transcript settings.",
+			]);
+			expect(providerMock).not.toHaveBeenCalled();
+		});
+
+		test.each([
+			[
+				"a rejected key",
+				async () =>
+					Response.json({ error: { message: "Invalid API Key" } }, { status: 401 }),
+				"The server at localhost:8000 rejected the API key. Check it in the transcript settings.",
+			],
+			[
+				"no such address or model",
+				async () => new Response("Not Found", { status: 404 }),
+				`The server at localhost:8000 has no ${MODEL} model at that address. Check the address and the model in the transcript settings.`,
+			],
+			[
+				"no answer",
+				() => Promise.reject(new TypeError("net::ERR_CONNECTION_REFUSED")),
+				"PodNotes could not reach the server at localhost:8000. Check the address in the transcript settings.",
+			],
+		])("%s says what to check, in PodNotes' words", async (_failure, answer, sentence) => {
+			providerMock.mockImplementation(answer);
+
+			await expect(
+				finalNotice(useServer({ openAICompatibleKey: "server-key" })),
+			).resolves.toBe(`Transcription failed: ${sentence}`);
+		});
+
+		test.each([
+			["a public feed's", publicFeed, () => publicFeed.url],
+			[
+				"a private feed's",
+				{
+					...publicFeed,
+					url: privateFeedPlaceholder("Test Podcast"),
+					urlSecretId: "podnotes-feed-url-1",
+				},
+				() => "https://private.example.com/feed/SUBSCRIBER-TOKEN.rss",
+			],
+		])(
+			"%s episode is uploaded to a local server, and no request holds its address",
+			async (_feed, feed, resolveUrl) => {
+				providerMock.mockImplementation(async () => Response.json(verbose));
+				const episode: Episode = {
+					...mockEpisode,
+					streamUrl: "https://cdn.example.com/SUBSCRIBER-TOKEN/episode.mp3",
+					feedUrl: feed.url,
+				};
+				const plugin = useServer({
+					feeds: savedFeedRepository(feed, [episode], resolveUrl),
+				});
+
+				await transcribe(plugin, episode);
+
+				expect(providerMock).toHaveBeenCalledOnce();
+				const [request] = providerMock.mock.calls[0];
+				expect(request.url).toBe(ENDPOINT);
+				expect((await fields(request)).find(([name]) => name === "file")).toEqual([
+					"file",
+					audio,
+				]);
+				for (const secret of [
+					"SUBSCRIBER-TOKEN",
+					"cdn.example.com",
+					"private.example.com",
+				]) {
+					expect(sentText(request)).not.toContain(secret);
+				}
+			},
+		);
 	});
 });
 

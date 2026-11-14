@@ -4,7 +4,7 @@ import {
 	type TranscriptCue,
 	untimed,
 } from "src/services/publishedTranscript/parse";
-import type { PartTranscript, Word } from "./providers/types";
+import type { PartTranscript, Segment, Word } from "./providers/types";
 
 /** What one part of the episode gave back. `transcript` is absent when its request failed. */
 export interface TranscribedPart {
@@ -13,7 +13,8 @@ export interface TranscribedPart {
 	readonly transcript?: PartTranscript;
 }
 
-type TimedPart = TranscribedPart & { readonly transcript?: { readonly words: readonly Word[] } };
+type TimedTranscript = Exclude<PartTranscript, { readonly text: string }>;
+type TimedPart = TranscribedPart & { readonly transcript?: TimedTranscript };
 
 const PARAGRAPH_LENGTH = 500;
 
@@ -24,10 +25,10 @@ function failedPartMarker(index: number): string {
 
 /**
  * The episode's transcript from its parts in order, or undefined when no part holds speech.
- * Words become one cue each, timed from the start of the episode, and the renderer folds
- * them into paragraphs as it does for a published word-level transcript. Text from a model
- * that returns no times becomes untimed paragraphs. Without `speakers` no cue names one,
- * whatever the provider answered.
+ * Words, or segments from a model that times no single word, become one cue each, timed from
+ * the start of the episode, and the renderer folds them into paragraphs as it does for a
+ * published transcript. Text from a model that returns no times becomes untimed paragraphs.
+ * Without `speakers` no cue names one, whatever the provider answered.
  */
 export function transcriptFromParts(
 	parts: readonly TranscribedPart[],
@@ -45,11 +46,17 @@ export function transcriptFromParts(
 function textOf(transcript: PartTranscript): string {
 	return "text" in transcript
 		? transcript.text
-		: transcript.words.map((word) => word.text).join(" ");
+		: timesOf(transcript)
+				.map((item) => item.text)
+				.join(" ");
+}
+
+function timesOf(transcript: TimedTranscript): readonly (Word | Segment)[] {
+	return "words" in transcript ? transcript.words : transcript.segments;
 }
 
 function isTimed(parts: readonly TranscribedPart[]): parts is readonly TimedPart[] {
-	return parts.every(({ transcript }) => !transcript || "words" in transcript);
+	return parts.every(({ transcript }) => !transcript || !("text" in transcript));
 }
 
 /**
@@ -84,14 +91,14 @@ function cuesOf(
 	};
 	return parts.flatMap(({ start, transcript }, index): TranscriptCue[] =>
 		transcript
-			? transcript.words.map((word) => ({
-					start: toMilliseconds(start + word.start),
-					end: toMilliseconds(start + word.end),
+			? timesOf(transcript).map((item) => ({
+					start: toMilliseconds(start + item.start),
+					end: toMilliseconds(start + item.end),
 					speaker:
-						speakers && word.speaker !== undefined
-							? numberOf(index, word.speaker)
+						speakers && "speaker" in item && item.speaker !== undefined
+							? numberOf(index, item.speaker)
 							: undefined,
-					text: word.text,
+					text: item.text,
 				}))
 			: [{ start: toMilliseconds(start), text: failedPartMarker(index) }],
 	);

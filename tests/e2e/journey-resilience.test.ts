@@ -53,6 +53,7 @@ import {
 	removeItunesStub,
 	removeOpenAIStub,
 	removeOpenRouterStub,
+	SERVER_SPEECH,
 	startFixtureServer,
 	transcriptionUploads,
 } from "./journey/fixtures";
@@ -894,11 +895,15 @@ describe("resilience journeys", () => {
 
 	describe("OpenRouter", () => {
 		const secretId = "podnotes-openrouter-api-key-464646";
-		/** Seeds `show` as playing `spoken` on OpenRouter's `model`, with a key and the stub. */
+		/**
+		 * Seeds `show` as playing `spoken` on OpenRouter's `model`, with a key, speaker labels
+		 * on and the stub. The note names the speakers only when `labels`.
+		 */
 		const transcribeWithOpenRouter = async (
 			show: FixtureFeed,
 			spoken: FixtureEpisode,
 			model: string,
+			labels = true,
 		) => {
 			const context = getContext();
 			const { obsidian, sandbox } = context;
@@ -941,8 +946,8 @@ describe("resilience journeys", () => {
 				),
 			).toBe(
 				`# Spoken Episode\n\nPodcast: ${show.title}\nDate: <date>\n\n` +
-					`[00:00:00](${link(0)}) **1:** Journey transcript opens here.\n\n` +
-					`[00:00:12](${link(12)}) **2:** A second speaker answers.`,
+					`[00:00:00](${link(0)}) ${labels ? "**1:** " : ""}Journey transcript opens here.\n\n` +
+					`[00:00:12](${link(12)}) ${labels ? "**2:** " : ""}A second speaker answers.`,
 			);
 			expect(await openRouterCatalogReads(obsidian)).toEqual([null]);
 			return server;
@@ -971,6 +976,7 @@ describe("resilience journeys", () => {
 					contentType: "application/json",
 					model: "elevenlabs/scribe-v2",
 					diarize: true,
+					granularities: ["word"],
 					url: server.mediaUrl(show, spoken),
 					audioBytes: 0,
 					sha256: null,
@@ -1003,13 +1009,104 @@ describe("resilience journeys", () => {
 					contentType: "application/json",
 					model: "x-ai/grok-stt-2.0",
 					diarize: true,
+					granularities: ["word", "segment"],
 					url: null,
 					audioBytes: audio.byteLength,
 					sha256: createHash("sha256").update(audio).digest("hex"),
 				},
 			]);
 		}, 60_000);
+
+		test.each([
+			["J-TR-11", "mistralai/voxtral-mini-transcribe-3-0", "voxtral", []],
+			["J-TR-12", "qwen/qwen3-asr-1.7b", "qwen", ["word"]],
+		])(
+			"%s %s gets the upload as multipart, and its note is timed without speaker labels",
+			async (_id, model, slug, granularities) => {
+				const { obsidian } = getContext();
+				const spoken: FixtureEpisode = {
+					title: "Spoken Episode",
+					seconds: 4,
+					pubDate: pubDate(0),
+				};
+				const show: FixtureFeed = {
+					title: `Journey OpenRouter ${slug}`,
+					slug: `openrouter-${slug}`,
+					artwork: true,
+					episodes: [spoken],
+				};
+
+				const server = await transcribeWithOpenRouter(show, spoken, model, false);
+
+				const audio = server.audio(show, spoken);
+				expect(await openRouterRequests(obsidian)).toEqual([
+					{
+						method: "POST",
+						authorization: "Bearer sk-or-journey-test",
+						contentType: expect.stringMatching(/^multipart\/form-data; boundary=/),
+						model,
+						diarize: false,
+						granularities,
+						url: null,
+						audioBytes: audio.byteLength,
+						sha256: createHash("sha256").update(audio).digest("hex"),
+					},
+				]);
+			},
+			60_000,
+		);
 	});
+
+	test("J-TR-13 an OpenAI-compatible server on this machine gets the episode's audio, with no key, and its word times time the note", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const spoken: FixtureEpisode = { title: "Spoken Episode", seconds: 4, pubDate: pubDate(0) };
+		const show: FixtureFeed = {
+			title: "Journey Own Server",
+			slug: "own-server",
+			artwork: true,
+			episodes: [spoken],
+		};
+		const server = await serve(show);
+		await seedLibrary(context, server, {
+			subscriptions: [show],
+			current: storedEpisode(server, show, spoken),
+			transcription: {
+				provider: "openai-compatible",
+				secretId: "",
+				model: "whisper-large-v3-turbo",
+				serverUrl: `${server.transcriptionServerUrl}/`,
+			},
+		});
+		const notePath = `Transcripts/${show.title}/${spoken.title}.md`;
+
+		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
+		await sandbox.waitForExists(notePath, { timeoutMs: 30_000 });
+
+		const link = (time: number) =>
+			`obsidian://podnotes?episodeName=Spoken%20Episode&url=${encodeURIComponent(server.feedUrl(show))}&time=${time}`;
+		expect(
+			(await readVaultText(obsidian, sandbox.path(notePath))).replace(
+				/^Date: .+$/m,
+				"Date: <date>",
+			),
+		).toBe(
+			`# Spoken Episode\n\nPodcast: ${show.title}\nDate: <date>\n\n` +
+				`[00:00:00](${link(0)}) ${SERVER_SPEECH[0]}\n\n` +
+				`[00:00:12](${link(12)}) ${SERVER_SPEECH[1]}`,
+		);
+		const audio = server.audio(show, spoken);
+		expect(server.transcriptions()).toEqual([
+			{
+				authorization: null,
+				model: "whisper-large-v3-turbo",
+				responseFormat: "verbose_json",
+				timestampGranularities: ["word", "segment"],
+				fileBytes: audio.byteLength,
+				sha256: createHash("sha256").update(audio).digest("hex"),
+			},
+		]);
+	}, 60_000);
 
 	test("J-TR-05 feed text cannot give the transcript note a block ID or an inline field", async () => {
 		const context = getContext();

@@ -229,7 +229,8 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   provider while it watches. It decodes Grok's MP3 uploads with Chromium's
   decoder and hears a tone under 500 Hz as one speaker and a higher tone as
   another, and logs each upload's `decodedSeconds` and `heardSpeakers`. Audio
-  it cannot decode is answered with a 400.
+  it cannot decode is answered with a 400. It answers Voxtral with segments, or
+  a 400 when asked for word times, and Qwen3 ASR with words and no speakers.
 
 - `.claude/skills/verify/ui.mjs` sends trusted input through
   `obsidian dev:cdp`. Its verbs are `click <css> [--text <s>] [--right]`,
@@ -270,7 +271,15 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   live in `screens/scenes.mjs`, the instance calls in `screens/instance.mjs`,
   and the contact sheet in `screens/sheet.mjs`.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
-  `private`, `library`, `retitle`, `requests`, `audio [vault path]` or `stop`.
+  `private`, `library`, `retitle`, `requests`, `server`, `transcriptions`,
+  `audio [vault path]` or `stop`. `server` prints the address of an
+  OpenAI-compatible transcription server on the same port, for the
+  "OpenAI-compatible server" provider's Server address. It answers
+  `POST /v1/audio/transcriptions` with verbose_json words, two sentences 12 s
+  apart, whatever the audio, and json's text when asked for json. The model
+  `json-only` refuses verbose_json with a 400, as OpenAI's gpt-transcribe does.
+  `transcriptions` prints each request it answered: its Authorization header,
+  model, response format, timestamp granularities, file type and size.
   `private` prints a feed at `priv3.supercast.com`, an address PodNotes keeps in
   SecretStorage as it does a Supercast subscriber's. `library`
   prints the URL of a manifest of eight podcasts, one whose feed answers 404, and

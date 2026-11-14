@@ -2,15 +2,8 @@ import { arrayBufferToBase64 } from "obsidian";
 import { isPlainObject } from "src/persistence/codecUtils";
 import type { NonEmpty } from "src/services/publishedTranscript/parse";
 import { fetchJsonWithTimeout } from "src/utility/networkRequest";
-import type {
-	Listing,
-	ModelProfile,
-	PartInput,
-	PartTranscript,
-	Provider,
-	ProviderRequest,
-	Word,
-} from "./types";
+import type { Listing, ModelProfile, PartInput, Provider, ProviderRequest } from "./types";
+import { verboseJsonTimes } from "./verboseJson";
 
 const TRANSCRIPTIONS_URL = "https://openrouter.ai/api/v1/audio/transcriptions";
 const CATALOG_URL = "https://openrouter.ai/api/v1/models?output_modalities=transcription";
@@ -20,6 +13,8 @@ const CATALOG_URL = "https://openrouter.ai/api/v1/models?output_modalities=trans
  * 1,980 s were answered in 20 to 31 s, so these leave room.
  */
 const PART_CAPS = { maxUploadBytes: 18_000_000, maxSeconds: 1800 };
+/** Voxtral and Qwen3 ASR took 33 to 35 s to answer 20 MB, so they get smaller parts. */
+const SLOW_PART_CAPS = { maxUploadBytes: 12_000_000, maxSeconds: 900 };
 
 type Body = (input: PartInput) => Promise<ProviderRequest["body"]>;
 
@@ -51,10 +46,10 @@ const grok: Body = async ({ model, speakers, audio }) => {
 };
 
 /**
- * Scribe v2 and MAI-Transcribe 2 take `diarize` beside the model, and list words only when
- * asked for speakers or word times. Only Scribe v2 fetches an address.
+ * Scribe v2, MAI-Transcribe 2 and Qwen3 ASR list words only when asked for word times or
+ * speakers. The first two take `diarize` beside the model. Only Scribe v2 fetches an address.
  */
-const topLevelDiarize: Body = async ({ model, speakers, audio }) => {
+const wordTimes: Body = async ({ model, speakers, audio }) => {
 	if ("url" in audio) {
 		return {
 			model: model.id,
@@ -70,6 +65,16 @@ const topLevelDiarize: Body = async ({ model, speakers, audio }) => {
 	form.append("response_format", "verbose_json");
 	form.append("timestamp_granularities[]", "word");
 	if (speakers) form.append("diarize", "true");
+	return form;
+};
+
+/** Voxtral refuses a request for word times with a 400, and times its segments unasked. */
+const segmentTimes: Body = async ({ model, audio }) => {
+	if ("url" in audio) throw new Error("Voxtral takes no audio address.");
+	const form = new FormData();
+	form.append("model", model.id);
+	form.append("file", audio.file);
+	form.append("response_format", "verbose_json");
 	return form;
 };
 
@@ -91,7 +96,7 @@ const MODELS: NonEmpty<ModelProfile & { readonly body: Body }> = [
 		...PART_CAPS,
 		// Its reel heard 4 voices on a show with 10.
 		mergeSpeakers: false,
-		body: topLevelDiarize,
+		body: wordTimes,
 	},
 	{
 		id: "microsoft/mai-transcribe-2",
@@ -100,7 +105,23 @@ const MODELS: NonEmpty<ModelProfile & { readonly body: Body }> = [
 		url: false,
 		...PART_CAPS,
 		mergeSpeakers: false,
-		body: topLevelDiarize,
+		body: wordTimes,
+	},
+	{
+		id: "mistralai/voxtral-mini-transcribe-3-0",
+		label: "Voxtral Mini Transcribe 3",
+		speakers: false,
+		url: false,
+		...SLOW_PART_CAPS,
+		body: segmentTimes,
+	},
+	{
+		id: "qwen/qwen3-asr-1.7b",
+		label: "Qwen3 ASR 1.7B",
+		speakers: false,
+		url: false,
+		...SLOW_PART_CAPS,
+		body: wordTimes,
 	},
 ];
 
@@ -117,13 +138,13 @@ export const openrouter: Provider = {
 	async transcribe(input, send) {
 		const model = MODELS.find(({ id }) => id === input.model.id);
 		if (!model) throw new Error(`OpenRouter has no ${input.model.id} request.`);
-		return parse(
-			await send({
-				url: TRANSCRIPTIONS_URL,
-				headers: { Authorization: `Bearer ${input.apiKey}` },
-				body: await model.body(input),
-			}),
-		);
+		const answer = await send({
+			url: TRANSCRIPTIONS_URL,
+			headers: { Authorization: `Bearer ${input.apiKey}` },
+			body: await model.body(input),
+		});
+		// An answer with neither words nor segments holds no speech.
+		return verboseJsonTimes(answer) ?? { words: [] };
 	},
 
 	failure(status, body) {
@@ -156,29 +177,3 @@ export const openrouter: Provider = {
 		return listing satisfies Listing;
 	},
 };
-
-function parse(answer: unknown): PartTranscript {
-	const words = isPlainObject(answer) ? answer.words : undefined;
-	if (!Array.isArray(words)) return { words: [] };
-	return {
-		words: words.flatMap((item: unknown): Word[] => {
-			// Scribe v2 also lists sounds, such as "[gentle music]", as `audio_event` items.
-			if (!isPlainObject(item) || (item.type ?? "word") !== "word") return [];
-			const { word: text, start, end, speaker } = item;
-			if (typeof text !== "string" || typeof start !== "number" || typeof end !== "number") {
-				return [];
-			}
-			return [
-				{
-					text,
-					start,
-					end,
-					speaker:
-						typeof speaker === "number" || typeof speaker === "string"
-							? `${speaker}`
-							: undefined,
-				},
-			];
-		}),
-	};
-}

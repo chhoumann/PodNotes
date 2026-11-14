@@ -618,6 +618,16 @@ describe("an episode whose feed publishes no transcript", () => {
 		).toHaveAccessibleName("Transcribe with Deepgram Paid");
 	});
 
+	test("names the user's own server without calling it paid", async () => {
+		get(plugin).settings.transcript.provider = "openai-compatible";
+		plugin.update((host) => host);
+		await openTranscript(episodeOf([]), 0);
+
+		expect(
+			await screen.findByRole("button", { name: /^Transcribe with/ }),
+		).toHaveAccessibleName("Transcribe with your server");
+	});
+
 	test("offers no paid transcription for a video", async () => {
 		await openTranscript(episodeOf([], { mediaType: "video" }), 0);
 

@@ -94,6 +94,8 @@ export interface NetworkRequestOptions {
 	readonly contentType?: string;
 	readonly headers?: Readonly<Record<string, string>>;
 	readonly body?: string | ArrayBuffer;
+	/** Lets the target be on this device or a private network. See `TargetPolicyOptions`. */
+	readonly privateHosts?: boolean;
 	/** @internal Trusted test seam. Never populate from application or user input. */
 	readonly request?: NetworkRequestImplementation;
 }
@@ -121,6 +123,7 @@ interface PreparedNetworkRequestOptions {
 	readonly contentType?: string;
 	readonly headers?: Record<string, string>;
 	readonly body?: string | ArrayBuffer;
+	readonly privateHosts: boolean;
 	readonly request: NetworkRequestImplementation;
 }
 
@@ -134,6 +137,7 @@ interface NetworkRequestOptionsSnapshot {
 	readonly contentType: unknown;
 	readonly headers: unknown;
 	readonly body: unknown;
+	readonly privateHosts: unknown;
 	readonly request: unknown;
 }
 
@@ -267,6 +271,7 @@ function snapshotOptions(value: unknown): NetworkRequestOptionsSnapshot {
 			"contentType",
 			"headers",
 			"body",
+			"privateHosts",
 			"request",
 		]);
 	} catch {
@@ -324,6 +329,9 @@ function prepareOptions(value: unknown): PreparedNetworkRequestOptions {
 		if (snapshot.request !== undefined && typeof snapshot.request !== "function") {
 			throw invalidOptions();
 		}
+		if (snapshot.privateHosts !== undefined && typeof snapshot.privateHosts !== "boolean") {
+			throw invalidOptions();
+		}
 
 		const acceptedStatuses = copyAcceptedStatuses(snapshot.acceptedStatuses);
 		const signal = prepareAbortSignal(snapshot.signal);
@@ -340,6 +348,7 @@ function prepareOptions(value: unknown): PreparedNetworkRequestOptions {
 			contentType: snapshot.contentType,
 			headers,
 			body,
+			privateHosts: snapshot.privateHosts === true,
 			request: (snapshot.request as NetworkRequestImplementation | undefined) ?? requestUrl,
 		};
 	} catch (error) {
@@ -386,9 +395,9 @@ function validateRequestBody(
 	return value as ArrayBuffer;
 }
 
-function assertTarget(rawUrl: string): string {
+function assertTarget(rawUrl: string, privateHosts: boolean): string {
 	try {
-		const validated = assertFetchableUrl(rawUrl);
+		const validated = assertFetchableUrl(rawUrl, { privateHosts });
 		return validated.href;
 	} catch {
 		throw new NetworkError("unsafe-target");
@@ -603,7 +612,7 @@ async function requestProjected<T>(
 		body: prepared.body,
 		throw: false,
 		// Keep the target gate as the final validation before listener registration.
-		url: assertTarget(url),
+		url: assertTarget(url, prepared.privateHosts),
 	};
 	const response = await runNativeRequest(
 		prepared.request,

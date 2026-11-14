@@ -67,7 +67,10 @@
 		void $rowHasNote;
 		return transcriptNote(app.vault, $settings, episode);
 	});
-	const provider = $derived(transcriptionChoice($settings).label);
+	const choice = $derived(transcriptionChoice($settings));
+	const provider = $derived(choice.server ? "your server" : choice.label);
+	// PodNotes cannot tell whether the user's own server charges.
+	const paid = $derived(!choice.server);
 
 	$effect(() => {
 		finding = false;
@@ -186,7 +189,7 @@
 						onclick={() => transcribeFromAudio()}
 					>
 						<span {@attach icon("key")}></span>Transcribe with {provider}
-						<span class="pn-tag">Paid</span>
+						{#if paid}<span class="pn-tag">Paid</span>{/if}
 					</button>
 				{/if}
 			</div>

@@ -47,6 +47,8 @@ const OPENROUTER_MODELS = [
 	"x-ai/grok-stt-2.0",
 	"elevenlabs/scribe-v2",
 	"microsoft/mai-transcribe-2",
+	"mistralai/voxtral-mini-transcribe-3-0",
+	"qwen/qwen3-asr-1.7b",
 ];
 
 /** @param {string} code */
@@ -108,12 +110,30 @@ const watchSource = (turns) => `(() => {
 	// OpenRouter's verbose_json words, at the same times, with numbered speakers.
 	const openRouterWords = (sentence, speaker, from) => words(sentence, speaker, from).map(({ punctuated_word, start, end }) => ({ word: punctuated_word, start, end, speaker, speaker_label: "speaker_" + speaker, confidence: 0.99 }));
 	const openrouter = { text: fullText, words: turns.flatMap(([from, speaker, line]) => openRouterWords(line, speaker, from)) };
+	// Voxtral times segments and refuses word times; Qwen3 ASR times words and labels no speaker.
+	const plainOpenRouter = {
+		"mistralai/voxtral-mini-transcribe-3-0": (form) =>
+			form.has("timestamp_granularities[]")
+				? Promise.reject({ status: 400, json: { error: { message: "Provider returned 400", code: 400 } } })
+				: {
+						text: openrouter.text,
+						segments: turns.map(([from, , line], id) => {
+							const turnWords = words(line, 0, from);
+							return { id, start: from, end: Math.round(turnWords[turnWords.length - 1].end * 10) / 10, text: " " + line };
+						}),
+					},
+		"qwen/qwen3-asr-1.7b": () => ({ text: openrouter.text, words: openrouter.words.map(({ word, start, end }) => ({ word, start, end })) }),
+	};
 	const openrouterCatalog = { data: ${jsLiteral(OPENROUTER_MODELS)}.map((id) => ({ id, expiration_date: null })) };
 	// Grok's MP3 uploads are heard as a diarizing model hears them: a tone under 500 Hz is one
 	// voice and a higher one another, labeled in the order they first sound in the request, with
-	// a word for each turn. Other OpenRouter requests get the fixed answer.
+	// a word for each turn. Voxtral and Qwen3 ASR answer as above, and other OpenRouter requests
+	// get the fixed answer.
 	const hearOpenRouter = async (request, entry) => {
-		if (request.contentType !== "application/json") return openrouter;
+		if (request.contentType !== "application/json") {
+			const form = await new Response(request.body, { headers: { "content-type": request.contentType } }).formData();
+			return plainOpenRouter[form.get("model")]?.(form) ?? openrouter;
+		}
 		const audio = JSON.parse(new TextDecoder().decode(request.body)).input_audio ?? {};
 		if (audio.format !== "mp3" || !audio.data) return openrouter;
 		const bytes = Uint8Array.from(atob(audio.data), (char) => char.charCodeAt(0));
@@ -181,7 +201,8 @@ const watchSource = (turns) => `(() => {
 				entries.push(Object.assign(entry, { answeredBy: "fixture provider", contentType: request.contentType, uploadBytes: request.body?.byteLength ?? 0, sourceUrl: namedAddress(request) }));
 				// Audio the decoder refuses is answered as OpenRouter answers audio it cannot read.
 				Promise.resolve(answer)
-					.then((json) => ({ status: 200, json }), () => {
+					.then((json) => ({ status: 200, json }), (refused) => {
+						if (refused?.status) return refused;
 						entry.decodedSeconds = "undecodable";
 						return { status: 400, json: { error: { message: "Invalid audio file", code: 400 } } };
 					})

@@ -103,6 +103,7 @@ type StoredTranscript = {
 	template?: unknown;
 	provider?: unknown;
 	model?: unknown;
+	serverUrl?: unknown;
 	diarization?: StoredDiarization | null;
 };
 
@@ -132,6 +133,7 @@ export function migrateTranscriptSettings(
 				? stored.provider
 				: releasedProvider(storedDiarization, holdsOpenAIKey),
 		model: typeof stored.model === "string" ? stored.model : "",
+		serverUrl: typeof stored.serverUrl === "string" ? stored.serverUrl : "",
 		diarization: {
 			// Only a new install starts with speaker labels on. A library that never
 			// stored the choice ran without them.

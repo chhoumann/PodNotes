@@ -33,17 +33,20 @@ describe("CredentialRepository", () => {
 				deepgram: "dg-key",
 				elevenLabs: "el-key",
 				openRouter: "or-key",
+				openAICompatible: "server-key",
 			}),
 		).toEqual({
 			openAISecretId: "podnotes-openai-api-key",
 			deepgramSecretId: "podnotes-deepgram-api-key",
 			elevenLabsSecretId: "podnotes-elevenlabs-api-key",
 			openRouterSecretId: "podnotes-openrouter-api-key",
+			openAICompatibleSecretId: "podnotes-openai-compatible-api-key",
 		});
 		expect(values.get("podnotes-openai-api-key")).toBe("sk-openai");
 		expect(values.get("podnotes-deepgram-api-key")).toBe("dg-key");
 		expect(values.get("podnotes-elevenlabs-api-key")).toBe("el-key");
 		expect(values.get("podnotes-openrouter-api-key")).toBe("or-key");
+		expect(values.get("podnotes-openai-compatible-api-key")).toBe("server-key");
 		expect(api.getSecret).toHaveBeenCalledWith("podnotes-openai-api-key");
 	});
 
