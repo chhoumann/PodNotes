@@ -599,3 +599,115 @@ export async function removeElevenLabsStub(obsidian: ObsidianClient): Promise<vo
 		return true;
 	})()`);
 }
+
+export type OpenRouterRequest = Readonly<{
+	method: string;
+	authorization: string | null;
+	contentType: string | null;
+	model: string | null;
+	diarize: boolean;
+	/** The address the request named in place of the audio. */
+	url: string | null;
+	audioBytes: number;
+	/** Of the audio the request carried, decoded from base64 for JSON. */
+	sha256: string | null;
+}>;
+
+const OPENROUTER_TRANSCRIPTIONS_URL = "https://openrouter.ai/api/v1/audio/transcriptions";
+const OPENROUTER_CATALOG_URL =
+	"https://openrouter.ai/api/v1/models?output_modalities=transcription";
+
+/**
+ * Answers OpenRouter's transcriptions with `first` from one speaker at 0 s and `second` from
+ * another 12 s in, and its catalog with the three models PodNotes offers.
+ */
+export async function installOpenRouterStub(
+	obsidian: ObsidianClient,
+	first: string,
+	second: string,
+): Promise<void> {
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		if (window.__podnotesJourneyOpenRouter) throw new Error("The OpenRouter stub is already installed.");
+		const ipc = window.electron.ipcRenderer;
+		const originalSend = ipc.send;
+		const requests = [];
+		const catalogReads = [];
+		const spoken = (sentence, speaker, from) => sentence.split(" ").map((word, index) => {
+			const start = from + index * 0.4;
+			return { word, start, end: start + 0.3, speaker, speaker_label: "speaker_" + speaker, confidence: 0.99 };
+		});
+		const words = [...spoken(${jsLiteral(first)}, 0, 0), ...spoken(${jsLiteral(second)}, 1, 12)];
+		const reply = (replyChannel, answer) => {
+			const body = new TextEncoder().encode(JSON.stringify(answer)).buffer;
+			ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body });
+		};
+		const answer = async (replyChannel, request) => {
+			const headers = new Headers(request.headers);
+			const contentType = request.contentType ?? null;
+			let model = null;
+			let diarize = false;
+			let url = null;
+			let bytes = null;
+			if (contentType === "application/json") {
+				const body = JSON.parse(new TextDecoder().decode(request.body));
+				model = body.model;
+				diarize = body.diarize === true || body.provider?.options?.xai?.diarize === true;
+				url = body.input_audio?.url ?? null;
+				if (body.input_audio?.data) bytes = Uint8Array.from(atob(body.input_audio.data), (char) => char.charCodeAt(0));
+			} else {
+				const form = await new Response(request.body, { headers: { "content-type": contentType ?? "" } }).formData();
+				const file = form.get("file");
+				model = form.get("model");
+				diarize = form.get("diarize") === "true";
+				if (file instanceof Blob) bytes = new Uint8Array(await file.arrayBuffer());
+			}
+			requests.push({
+				method: (request.method ?? "GET").toUpperCase(),
+				authorization: headers.get("authorization"),
+				contentType,
+				model,
+				diarize,
+				url,
+				audioBytes: bytes?.byteLength ?? 0,
+				sha256: bytes && require("node:crypto").createHash("sha256").update(bytes).digest("hex"),
+			});
+			reply(replyChannel, { text: ${jsLiteral(`${first} ${second}`)}, words });
+		};
+		ipc.send = function (channel, replyChannel, request, ...rest) {
+			if (channel === "request-url" && request?.url === ${jsLiteral(OPENROUTER_TRANSCRIPTIONS_URL)}) {
+				void answer(replyChannel, request);
+				return;
+			}
+			if (channel === "request-url" && request?.url === ${jsLiteral(OPENROUTER_CATALOG_URL)}) {
+				catalogReads.push(new Headers(request.headers).get("authorization"));
+				queueMicrotask(() => reply(replyChannel, { data: ["x-ai/grok-stt-2.0", "elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"].map((id) => ({ id, expiration_date: null })) }));
+				return;
+			}
+			return originalSend.call(ipc, channel, replyChannel, request, ...rest);
+		};
+		window.__podnotesJourneyOpenRouter = { ipc, originalSend, requests, catalogReads };
+		return true;
+	})()`);
+}
+
+export async function openRouterRequests(obsidian: ObsidianClient): Promise<OpenRouterRequest[]> {
+	return await obsidian.dev.evalJson<OpenRouterRequest[]>(
+		"window.__podnotesJourneyOpenRouter.requests",
+	);
+}
+
+/** The Authorization header of each catalog read, null when there was none. */
+export async function openRouterCatalogReads(obsidian: ObsidianClient): Promise<(string | null)[]> {
+	return await obsidian.dev.evalJson<(string | null)[]>(
+		"window.__podnotesJourneyOpenRouter.catalogReads",
+	);
+}
+
+export async function removeOpenRouterStub(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJson(`(() => {
+		const stub = window.__podnotesJourneyOpenRouter;
+		if (stub) stub.ipc.send = stub.originalSend;
+		delete window.__podnotesJourneyOpenRouter;
+		return true;
+	})()`);
+}

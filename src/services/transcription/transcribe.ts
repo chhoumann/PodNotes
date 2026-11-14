@@ -30,6 +30,7 @@ const ENDS_THE_JOB: ReadonlySet<FailureKind> = new Set([
 	"auth",
 	"credits",
 	"model-unavailable",
+	"privacy",
 	"rejected",
 ]);
 
@@ -105,9 +106,29 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 			`This version of PodNotes has no ${choice.unknownModel} model, so ${choice.label} used ${model.label}.`,
 		);
 	}
+	if (choice.withdrawnModel) {
+		warnings.push(
+			`${choice.label} no longer offers ${choice.withdrawnModel.label}, so PodNotes used ${model.label}.`,
+		);
+	}
 	if (choice.speakers && !model.speakers) {
 		warnings.push(
 			`Saved without speaker labels, because ${choice.label} does not label speakers. These providers do: ${providersWithSpeakers().join(", ")}.`,
+		);
+	}
+	// A request routed where the speaker option is ignored is answered without speakers.
+	const labeled = parts.some(
+		({ transcript }) =>
+			transcript &&
+			"words" in transcript &&
+			transcript.words.some((word) => word.speaker !== undefined),
+	);
+	if (speakers && !labeled) {
+		warnings.push(`Saved without speaker labels, because ${model.label} returned none.`);
+	}
+	if (speakers && labeled && parts.length > 1) {
+		warnings.push(
+			`${choice.label} transcribed this episode in ${parts.length} parts, and speaker labels restart in each, so one person can have several labels.`,
 		);
 	}
 	return { content, warnings };

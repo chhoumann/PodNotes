@@ -163,20 +163,20 @@ describe("TranscriptionService", () => {
 			"%s refuses a provider this version does not have, and sends nothing",
 			async (_command, run) => {
 				const plugin = createMockPlugin({
-					provider: "openrouter",
-					model: "x-ai/grok-stt-2.0",
+					provider: "assemblyai",
+					model: "universal-3-6-pro",
 				});
 
 				await run(new TranscriptionService(plugin));
 
 				expect(noticeMessages).toEqual([
-					"This version of PodNotes cannot transcribe with openrouter. Update PodNotes, or choose another provider in the transcript settings.",
+					"This version of PodNotes cannot transcribe with assemblyai. Update PodNotes, or choose another provider in the transcript settings.",
 				]);
 				expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
 				expect(providerMock).not.toHaveBeenCalled();
 				expect(plugin.settings.transcript).toMatchObject({
-					provider: "openrouter",
-					model: "x-ai/grok-stt-2.0",
+					provider: "assemblyai",
+					model: "universal-3-6-pro",
 				});
 			},
 		);
@@ -486,7 +486,7 @@ describe("TranscriptionService", () => {
 				await vi.advanceTimersByTimeAsync(60 * 60_000);
 
 				expect(String(setMessage.mock.calls.at(-1)?.[0])).toMatch(
-					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: ElevenLabs, Deepgram\.$/,
+					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: ElevenLabs, Deepgram, OpenRouter\.$/,
 				);
 				expect(hide).not.toHaveBeenCalled();
 				expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
@@ -1220,7 +1220,425 @@ describe("TranscriptionService", () => {
 			},
 		);
 	});
+
+	describe("an OpenRouter transcript", () => {
+		const TRANSCRIPTIONS = "https://openrouter.ai/api/v1/audio/transcriptions";
+		const CATALOG = "https://openrouter.ai/api/v1/models?output_modalities=transcription";
+		const HOUR_MS = 60 * 60 * 1000;
+		const audio = new Uint8Array(2048).map((_, index) => (index * 13) % 241);
+		const useOpenRouter = (
+			overrides: { model?: string; speakers?: boolean; feeds?: FeedRepository } = {},
+		) => {
+			getEpisodeAudioBufferMock.mockResolvedValue({ buffer: audio.buffer, extension: "mp3" });
+			return createMockPlugin({
+				provider: "openrouter",
+				openRouterKey: "openrouter-key",
+				speakers: true,
+				...overrides,
+			});
+		};
+		/** A word as OpenRouter's verbose_json lists it, with a speaker when one is given. */
+		const word = (text: string, start: number, end: number, speaker?: number) => ({
+			word: text,
+			start,
+			end,
+			confidence: 0.99,
+			...(speaker !== undefined && { speaker, speaker_label: `speaker_${speaker}` }),
+		});
+		const answers = {
+			text: "Hello there. [laughter] Hi!",
+			duration: 11,
+			words: [
+				word("Hello", 1.2, 1.5, 0),
+				word("there.", 1.5, 1.9, 0),
+				{ ...word("[laughter]", 2, 3, 0), type: "audio_event" },
+				word("Hi!", 10.16, 10.5, 1),
+			],
+		};
+		/** OpenRouter's public catalog, listing each model with its end date or null. */
+		const catalog = (models: Record<string, string | null>) => ({
+			data: Object.entries(models).map(([id, expiration_date]) => ({
+				id,
+				name: id,
+				expiration_date,
+				endpoints: ["/api/v1/audio/transcriptions"],
+			})),
+		});
+		const EVERY_MODEL = catalog({
+			"x-ai/grok-stt-2.0": null,
+			"x-ai/grok-stt-1.0": "2026-11-15",
+			"elevenlabs/scribe-v2": null,
+			"microsoft/mai-transcribe-2": null,
+		});
+		/** Answers the catalog with `listed`, and each transcription request with `answer`. */
+		const openRouter = (
+			answer: (request: RequestUrlParam) => Response = () => Response.json(answers),
+			listed: unknown = EVERY_MODEL,
+		) =>
+			providerMock.mockImplementation(async (request) =>
+				request.url === CATALOG ? Response.json(listed) : answer(request),
+			);
+		/** The transcription requests the jobs sent, oldest first. */
+		const sent = () =>
+			providerMock.mock.calls
+				.map(([request]) => request)
+				.filter(({ url }) => url === TRANSCRIPTIONS);
+		const catalogReads = () =>
+			providerMock.mock.calls.filter(([request]) => request.url === CATALOG).length;
+		const sentJson = (request: RequestUrlParam) =>
+			JSON.parse(new TextDecoder().decode(sentBytes(request)));
+		const fields = async (request: RequestUrlParam) =>
+			Object.fromEntries(
+				[...(await sentForm(request))].filter(([, value]) => typeof value === "string"),
+			);
+		const sentModel = async (request: RequestUrlParam) =>
+			request.contentType === "application/json"
+				? sentJson(request).model
+				: (await sentForm(request)).get("model");
+		const link = (time: string) =>
+			`obsidian://podnotes?episodeName=Test%20Episode&url=https%3A%2F%2Fexample.com%2Ffeed.xml&time=${time}`;
+		const labeled = `# Test Episode\n\n[00:00:01](${link("1.2")}) **1:** Hello there.\n\n[00:00:10](${link("10.16")}) **2:** Hi!`;
+		const unlabeled = `# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there.\n\n[00:00:10](${link("10.16")}) Hi!`;
+
+		test("Grok STT 2.0, the recommended model, gets even a public episode as base64 JSON, routed to xAI and asked there for speaker labels", async () => {
+			openRouter();
+			const plugin = useOpenRouter({ feeds: savedFeedRepository(publicFeed, [mockEpisode]) });
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce();
+			expect(sent()).toHaveLength(1);
+			const [request] = sent();
+			expect(request.method).toBe("POST");
+			expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+			expect(request.contentType).toBe("application/json");
+			expect(sentJson(request)).toEqual({
+				model: "x-ai/grok-stt-2.0",
+				input_audio: { data: Buffer.from(audio).toString("base64"), format: "mp3" },
+				response_format: "verbose_json",
+				timestamp_granularities: ["word", "segment"],
+				provider: { only: ["xai"], options: { xai: { diarize: true } } },
+			});
+			expect(savedNote(plugin)).toBe(labeled);
+		});
+
+		test.each(["elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"])(
+			"%s gets an upload as multipart, asked for speaker labels beside the model",
+			async (model) => {
+				openRouter();
+				const plugin = useOpenRouter({ model });
+
+				await transcribe(plugin);
+
+				expect(sent()).toHaveLength(1);
+				const [request] = sent();
+				expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+				expect(await fields(request)).toEqual({
+					model,
+					response_format: "verbose_json",
+					"timestamp_granularities[]": "word",
+					diarize: "true",
+				});
+				expect(new Uint8Array(await (await sentFile(request)).arrayBuffer())).toEqual(
+					audio,
+				);
+				expect(savedNote(plugin)).toBe(labeled);
+			},
+		);
+
+		test.each(["x-ai/grok-stt-2.0", "elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"])(
+			"with speaker labels off, %s is asked for none, and the note names no speaker",
+			async (model) => {
+				openRouter();
+				const plugin = useOpenRouter({ model, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(sent()).toHaveLength(1);
+				expect(sentText(sent()[0])).not.toContain("diarize");
+				expect(savedNote(plugin)).toBe(unlabeled);
+			},
+		);
+
+		test.each(["elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"])(
+			"with speaker labels off, %s is still asked for word times, which OpenRouter sends only when asked",
+			async (model) => {
+				openRouter((request) =>
+					Response.json(
+						/timestamp_granularities|diarize/.test(sentText(request))
+							? {
+									...answers,
+									words: answers.words.map(
+										({ speaker: _speaker, speaker_label: _label, ...rest }) =>
+											rest,
+									),
+								}
+							: {
+									text: answers.text,
+									duration: 11,
+									segments: [{ id: 0, start: 0, end: 11, text: answers.text }],
+								},
+					),
+				);
+				const plugin = useOpenRouter({ model, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+				expect(savedNote(plugin)).toBe(unlabeled);
+			},
+		);
+
+		test("Scribe v2 uploads the episode once when OpenRouter's provider cannot download its address", async () => {
+			openRouter((request) =>
+				request.contentType === "application/json"
+					? Response.json(
+							{
+								error: {
+									message:
+										"Provider could not download input_audio.url; ensure it is publicly reachable and serves a supported audio file",
+									code: 400,
+								},
+							},
+							{ status: 400 },
+						)
+					: Response.json(answers),
+			);
+			const plugin = useOpenRouter({
+				model: "elevenlabs/scribe-v2",
+				feeds: savedFeedRepository(publicFeed, [mockEpisode]),
+			});
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(sent().map(({ contentType }) => contentType === "application/json")).toEqual([
+				true,
+				false,
+			]);
+			expect(getEpisodeAudioBufferMock).toHaveBeenCalledOnce();
+			expect(savedNote(plugin)).toBe(labeled);
+		});
+
+		test("Scribe v2 takes a public episode by its address in one request, and its audio is never loaded", async () => {
+			openRouter();
+			const plugin = useOpenRouter({
+				model: "elevenlabs/scribe-v2",
+				feeds: savedFeedRepository(publicFeed, [mockEpisode]),
+			});
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			expect(sent()).toHaveLength(1);
+			const [request] = sent();
+			expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+			expect(request.contentType).toBe("application/json");
+			expect(sentJson(request)).toEqual({
+				model: "elevenlabs/scribe-v2",
+				input_audio: { url: "https://example.com/episode.mp3", format: "mp3" },
+				response_format: "verbose_json",
+				timestamp_granularities: ["word"],
+				diarize: true,
+			});
+			expect(savedNote(plugin)).toBe(labeled);
+		});
+
+		test("a 40 MB episode goes in parts of at most 18 MB and 1,800 s, one at a time, timed to the millisecond from the episode's start", async () => {
+			const stream = MP3_STREAMS.mpeg1At96Kbps;
+			const frames = Math.ceil(40_000_000 / stream.frameBytes);
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: mp3Bytes(stream, frames).buffer,
+				extension: "mp3",
+			});
+			const partBytes: number[] = [];
+			openRouter((request) => {
+				partBytes.push(
+					Buffer.from(sentJson(request).input_audio.data, "base64").byteLength,
+				);
+				return Response.json({ words: [word(`Part ${partBytes.length}.`, 1, 1.5)] });
+			});
+			const plugin = createMockPlugin({
+				provider: "openrouter",
+				openRouterKey: "openrouter-key",
+			});
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(partBytes.length).toBeGreaterThan(2);
+			expect(partBytes.reduce((sum, bytes) => sum + bytes)).toBe(frames * stream.frameBytes);
+			for (const bytes of partBytes) {
+				expect(bytes).toBeLessThanOrEqual(18_000_000);
+				expect(mp3Seconds(stream, bytes)).toBeLessThanOrEqual(1800);
+			}
+			// Each part's word is 1 s into it.
+			const expected = partBytes.map(
+				(_, index) =>
+					Math.round((mp3Seconds(stream, sumOf(partBytes.slice(0, index))) + 1) * 1000) /
+					1000,
+			);
+			const note = savedNote(plugin);
+			const times = [...note.matchAll(/time=([\d.]+)\)/g)].map(([, time]) => time);
+			expect(times).toEqual(expected.map(String));
+			expect(note).toContain(`Part ${partBytes.length}.`);
+		});
+
+		test("labels from two parts never name the same speaker, and the notice says labels restart in each", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
+			openRouter(() =>
+				Response.json({ words: [word("Hello.", 1, 1.5, 0), word("Hi.", 10, 10.5, 1)] }),
+			);
+			const plugin = createMockPlugin({
+				provider: "openrouter",
+				openRouterKey: "openrouter-key",
+				speakers: true,
+			});
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"OpenRouter transcribed this episode in 2 parts, and speaker labels restart in each, so one person can have several labels.",
+			);
+
+			expect(sent()).toHaveLength(2);
+			const labels = [...savedNote(plugin).matchAll(/\*\*(\d+):\*\* (\w+)/g)].map(
+				([, speaker, text]) => `${speaker} ${text}`,
+			);
+			expect(labels).toEqual(["1 Hello", "2 Hi", "3 Hello", "4 Hi"]);
+		});
+
+		test("speaker labels asked for and none returned, as from a route that ignores the option, saves the note and says so", async () => {
+			openRouter(() =>
+				Response.json({ words: [word("Hello", 1.2, 1.5), word("there.", 1.5, 1.9)] }),
+			);
+			const plugin = useOpenRouter();
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"Saved without speaker labels, because Grok STT 2.0 returned none.",
+			);
+
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there.`,
+			);
+		});
+
+		test.each<[name: string, status: number, message: string, shown: string]>([
+			[
+				"402",
+				402,
+				"Insufficient credits. Add more using https://openrouter.ai/settings/credits SENTINEL",
+				"Your OpenRouter account is out of credit. Add credit there, then try again.",
+			],
+			[
+				"404 for a model no route of which meets the account's privacy settings",
+				404,
+				"No endpoints found matching your data policy (Zero data retention). Configure: https://openrouter.ai/settings/privacy SENTINEL",
+				"OpenRouter does not offer the x-ai/grok-stt-2.0 model under your OpenRouter privacy settings. Change them there, or choose another model in the transcript settings.",
+			],
+			[
+				"404",
+				404,
+				"No endpoints found for x-ai/grok-stt-2.0. SENTINEL",
+				"OpenRouter does not offer the x-ai/grok-stt-2.0 model to this API key.",
+			],
+			[
+				"401",
+				401,
+				"No cookie auth credentials found SENTINEL",
+				"OpenRouter rejected the API key. Check it in the transcript settings.",
+			],
+		])(
+			"a %s is said in PodNotes' words, with none of OpenRouter's, and no other part is sent",
+			async (_name, status, message, shown) => {
+				getEpisodeAudioBufferMock.mockResolvedValue(twoPartAudio());
+				openRouter(() => Response.json({ error: { message, code: status } }, { status }));
+				const plugin = createMockPlugin({
+					provider: "openrouter",
+					openRouterKey: "openrouter-key",
+				});
+
+				await expect(finalNotice(plugin)).resolves.toBe(`Transcription failed: ${shown}`);
+
+				expect(sent()).toHaveLength(1);
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			},
+		);
+
+		test("a chosen model the catalog no longer lists runs the recommended one, and the notice says so", async () => {
+			openRouter(
+				undefined,
+				catalog({ "x-ai/grok-stt-2.0": null, "microsoft/mai-transcribe-2": null }),
+			);
+			const plugin = useOpenRouter({ model: "elevenlabs/scribe-v2" });
+
+			await expect(finalNotice(plugin)).resolves.toBe(
+				"OpenRouter no longer offers ElevenLabs Scribe v2, so PodNotes used Grok STT 2.0.",
+			);
+
+			expect(await Promise.all(sent().map(sentModel))).toEqual(["x-ai/grok-stt-2.0"]);
+		});
+
+		test("a model whose end date has come is skipped, and the next one is recommended", async () => {
+			const today = new Date().toISOString().slice(0, 10);
+			openRouter(
+				undefined,
+				catalog({
+					"x-ai/grok-stt-2.0": today,
+					"elevenlabs/scribe-v2": null,
+					"microsoft/mai-transcribe-2": null,
+				}),
+			);
+			const plugin = useOpenRouter();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			expect(await Promise.all(sent().map(sentModel))).toEqual(["elevenlabs/scribe-v2"]);
+		});
+
+		test("a catalog that cannot be read leaves every model offered, and the next job reads it again", async () => {
+			let reads = 0;
+			providerMock.mockImplementation(async (request) => {
+				if (request.url !== CATALOG) return Response.json(answers);
+				return ++reads === 1
+					? new Response("", { status: 503 })
+					: Response.json(catalog({ "x-ai/grok-stt-2.0": null }));
+			});
+			const plugin = useOpenRouter({ model: "elevenlabs/scribe-v2" });
+
+			await transcribe(plugin);
+			await transcribe(plugin);
+
+			expect(reads).toBe(2);
+			expect(await Promise.all(sent().map(sentModel))).toEqual([
+				"elevenlabs/scribe-v2",
+				"x-ai/grok-stt-2.0",
+			]);
+		});
+
+		test("the catalog is read again only once a day has passed", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				openRouter();
+				const plugin = useOpenRouter();
+
+				await transcribe(plugin);
+				vi.setSystemTime(Date.now() + 23 * HOUR_MS);
+				await transcribe(plugin);
+				expect(catalogReads()).toBe(1);
+
+				vi.setSystemTime(Date.now() + 2 * HOUR_MS);
+				await transcribe(plugin);
+				expect(catalogReads()).toBe(2);
+				expect(sent()).toHaveLength(3);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
 });
+
+function sumOf(numbers: readonly number[]): number {
+	return numbers.reduce((sum, number) => sum + number, 0);
+}
 
 function deepgramAnswer(words: Record<string, unknown>[]) {
 	return { results: { channels: [{ alternatives: [{ words }] }] } };

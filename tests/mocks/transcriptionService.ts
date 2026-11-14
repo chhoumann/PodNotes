@@ -15,15 +15,17 @@ export const noticeMessages: string[] = [];
 export const getEpisodeAudioBufferMock = vi.fn();
 
 /**
- * Resets the mock above, `providerMock` and `noticeMessages` before each test of the
- * calling file, and blocks `fetch` as Obsidian's CORS check does for a provider. The file
+ * Resets the mock above, `providerMock`, `noticeMessages` and the catalogs read before each
+ * test of the calling file, and blocks `fetch` as Obsidian's CORS check does for a provider. The file
  * still mocks `obsidian` and `../downloadEpisode` with these handles, because `vi.mock`
  * applies only to its own file.
  */
 export function installTranscriptionMocks(): void {
-	beforeEach(() => {
+	beforeEach(async () => {
 		vi.clearAllMocks();
 		noticeMessages.length = 0;
+		// Imported here: at the top it would load the engine before `vi.mock` gives it this module's mocks.
+		(await import("src/services/transcription")).catalogs.set(new Map());
 		providerMock.mockReset();
 		vi.stubGlobal("fetch", corsBlockedFetch);
 		getEpisodeAudioBufferMock.mockResolvedValue({
@@ -72,6 +74,7 @@ export function createMockPlugin(
 		openAIKey?: string;
 		deepgramKey?: string;
 		elevenLabsKey?: string;
+		openRouterKey?: string;
 		/** The stored provider ID. OpenAI when left out. */
 		provider?: string;
 		/** The stored model ID. The recommended model when left out. */
@@ -91,6 +94,7 @@ export function createMockPlugin(
 		openAIKey = "test-api-key",
 		deepgramKey = "",
 		elevenLabsKey = "",
+		openRouterKey = "",
 		provider = "openai",
 		model = "",
 		speakers = false,
@@ -108,6 +112,7 @@ export function createMockPlugin(
 		openai: openAIKey,
 		deepgram: deepgramKey,
 		elevenlabs: elevenLabsKey,
+		openrouter: openRouterKey,
 	};
 
 	return {
@@ -115,6 +120,7 @@ export function createMockPlugin(
 			openAISecretId: openAIKey ? "openai-secret" : "",
 			deepgramSecretId: "",
 			elevenLabsSecretId: "",
+			openRouterSecretId: "",
 			timestamp: { template: "- {{linktime}} ", offset: 5 },
 			transcript: {
 				path: "Transcripts/{{podcast}}/{{title}}.md",
