@@ -1384,7 +1384,7 @@ describe("TranscriptionService", () => {
 			expect(savedNote(plugin)).toBe(labeled);
 		});
 
-		test("a 40 MB episode goes in parts of at most 18 MB and 1,800 s, one at a time, timed from the episode's start", async () => {
+		test("a 40 MB episode goes in parts of at most 18 MB and 1,800 s, one at a time, timed to the millisecond from the episode's start", async () => {
 			const stream = MP3_STREAMS.mpeg1At96Kbps;
 			const frames = Math.ceil(40_000_000 / stream.frameBytes);
 			getEpisodeAudioBufferMock.mockResolvedValue({
@@ -1413,12 +1413,13 @@ describe("TranscriptionService", () => {
 			}
 			// Each part's word is 1 s into it.
 			const expected = partBytes.map(
-				(_, index) => mp3Seconds(stream, sumOf(partBytes.slice(0, index))) + 1,
+				(_, index) =>
+					Math.round((mp3Seconds(stream, sumOf(partBytes.slice(0, index))) + 1) * 1000) /
+					1000,
 			);
 			const note = savedNote(plugin);
-			const times = [...note.matchAll(/time=([\d.]+)\)/g)].map(([, time]) => Number(time));
-			expect(times).toHaveLength(expected.length);
-			times.forEach((time, index) => expect(time).toBeCloseTo(expected[index], 2));
+			const times = [...note.matchAll(/time=([\d.]+)\)/g)].map(([, time]) => time);
+			expect(times).toEqual(expected.map(String));
 			expect(note).toContain(`Part ${partBytes.length}.`);
 		});
 
