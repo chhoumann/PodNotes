@@ -16,6 +16,7 @@ export const sidebar = [
 		items: [
 			{ label: "Overview", slug: "index" },
 			{ label: "Getting started", slug: "getting-started" },
+			{ label: "Update to 2.25.0", slug: "update-2-25" },
 			{ label: "Update to 2.22.0", slug: "upgrade" },
 			{ label: "Use PodNotes on your phone", slug: "mobile" },
 		],
@@ -29,6 +30,7 @@ export const sidebar = [
 			{ label: "Use the queue and playlists", slug: "playlists" },
 			{ label: "Downloads and local files", slug: "local_files" },
 			{ label: "Transcribe episodes", slug: "transcripts" },
+			{ label: "Choose a transcription provider", slug: "transcription-providers" },
 		],
 	},
 	{

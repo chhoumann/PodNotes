@@ -32,7 +32,7 @@ These settings decide what the previous-track and next-track buttons of a headse
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **Timestamp template** | `- {{linktime}}` with a space at the end | Sets the text each capture inserts. While an episode is loaded, the setting shows the result for it. Its time tag also sets the times in transcripts that feeds publish. See [Capture timestamps](/timestamps/). |
+| **Timestamp template** | `- {{linktime}}` with a space at the end | Sets the text each capture inserts. While an episode is loaded, the setting shows the result for it. Its time tag also sets the times in audio transcripts from ElevenLabs, Deepgram, OpenRouter, and an OpenAI-compatible server that returns times, and in timed transcripts that feeds publish. See [Capture timestamps](/timestamps/). |
 | **Timestamp offset (s)** | 0 | Subtracts this many seconds from each capture, to make up for reaction time. |
 | **QuickAdd choice** | None | Runs this QuickAdd choice for each capture, instead of inserting the timestamp. **Choose...** picks one of your QuickAdd choices, and **Create** adds a ready-made one. See [Capture with QuickAdd](/QuickAdd/#capture-with-quickadd). |
 | **Episode note path** | `PodNotes/{{podcast}}/{{title}}.md` | Sets where PodNotes creates episode notes, and shows the path for one of your episodes. See [Create episode notes](/notes/). |
@@ -42,17 +42,18 @@ These settings decide what the previous-track and next-track buttons of a headse
 
 ## Transcripts
 
-**Diarization provider**, **Deepgram API key**, and **Speaker label format** are turned off until **Speaker diarization** is on. **Deepgram API key** also needs **Diarization provider** set to **Deepgram**.
+Only the API key row for the selected **Transcription provider** is shown. **Server address** appears while **OpenAI-compatible server** is selected, and **Speaker label format** appears while **Speaker labels** is on.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| **OpenAI API key** | None | Selects the Obsidian secret that holds your OpenAI API key, or creates one. See [Set up an OpenAI key](/transcripts/#set-up-an-openai-key). |
-| **Transcript path** | `transcripts/{{podcast}}/{{title}}.md` | Sets where PodNotes saves transcripts. Keep `.md` at the end, because PodNotes does not add it. |
+| **Transcription provider** | **ElevenLabs** on new installs ([migrated on update](/update-2-25/)) | Chooses **ElevenLabs**, **Deepgram**, **OpenRouter**, **OpenAI**, or **OpenAI-compatible server** for audio transcription, and resets **Model** to the provider's recommended model (or clears it for **OpenAI-compatible server**) when changed. See [Choose a transcription provider](/transcription-providers/). |
+| **Server address** | Empty | Shown when **Transcription provider** is **OpenAI-compatible server**. Sets the server's `http://` or `https://` URL (placeholder `http://localhost:8000/v1`). PodNotes trims trailing slashes and appends `/audio/transcriptions` unless the address already ends with `/audio/transcriptions`. |
+| **ElevenLabs API key**, **Deepgram API key**, **OpenRouter API key**, **OpenAI API key**, or **OpenAI-compatible server API key** | None | Selects the Obsidian secret on this device that holds your API key for the selected provider, or creates one. Optional when **Transcription provider** is **OpenAI-compatible server**. |
+| **Model** | Provider's recommended model (empty on **OpenAI-compatible server**) | Chooses the speech-to-text model for the selected provider: **Scribe v3** on **ElevenLabs**, **Nova-3** on **Deepgram**, **Grok STT 2.0** (recommended), **ElevenLabs Scribe v2**, **MAI-Transcribe 2**, **Voxtral Mini Transcribe 3**, or **Qwen3 ASR 1.7B** on **OpenRouter**, and **GPT Transcribe** on **OpenAI**. On **OpenAI-compatible server**, becomes a text field where you enter the model ID your server expects. |
+| **Speaker labels** | On (Off if off before updating) | Numbers speakers `1`, `2`, `3` in audio transcripts. Disabled while off when the selected model or provider does not label speakers (**Voxtral Mini Transcribe 3**, **Qwen3 ASR 1.7B**, **GPT Transcribe**, or **OpenAI-compatible server**). See [Speaker labels](/transcripts/#speaker-labels). |
+| **Speaker label format** | `**{{speaker}}:**` with a space at the end | Sets the text before each speaker's turn. `{{speaker}}` becomes the speaker number or feed speaker name. Transcripts that feeds publish use it too, even with **Speaker labels** off. See [Change the speaker label format](/transcripts/#change-the-speaker-label-format). |
+| **Transcript path** | `transcripts/{{podcast}}/{{title}}.md` | Sets where PodNotes saves transcripts, and shows the path for one of your episodes. Keep `.md` at the end, because PodNotes does not add it. |
 | **Transcript template** | [The default transcript template](/templates/#transcript-and-timestamp-tags) | Sets the content of a new transcript note. |
-| **Speaker diarization** | Off | Labels transcript turns by speaker. See [Add speaker labels](/transcripts/#add-speaker-labels). |
-| **Diarization provider** | **OpenAI (gpt-4o-transcribe-diarize)** | Chooses OpenAI, which uses your OpenAI API key, or **Deepgram**, which needs its own key and keeps speaker labels consistent across long episodes. |
-| **Deepgram API key** | None | Selects the Obsidian secret that holds your Deepgram API key, or creates one. |
-| **Speaker label format** | `**{{speaker}}:**` with a space at the end | Sets the text before each speaker's turn. `{{speaker}}` becomes the speaker label. Transcripts that feeds publish use it too, even with **Speaker diarization** off. See [Change the speaker label format](/transcripts/#change-the-speaker-label-format). |
 
 ## Downloads
 
@@ -73,14 +74,14 @@ These settings decide what the previous-track and next-track buttons of a headse
 | Setting | Default | What it does |
 | --- | --- | --- |
 | **Import settings** | None | **Import** opens a file picker. After you confirm, PodNotes replaces your preferences, templates, feeds, playlists, queue, and favorites with the ones in the file, and adds its playback progress for episodes this vault has not played. Your own progress, downloads, and local files stay. See [Import your settings](/import_export/#import-your-settings). |
-| **Include API keys** | Off | Adds the OpenAI and Deepgram keys on this device to the next export, in plain text. The export file sits in your vault, where sync and other plugins can read it. The toggle turns off again each time you open the tab. |
+| **Include API keys** | Off | Adds the ElevenLabs, Deepgram, OpenRouter, OpenAI, and OpenAI-compatible server API keys stored on this device to the next export, in plain text. The export file sits in your vault, where sync and other plugins can read it. The toggle turns off again each time you open the tab. |
 | **Export settings** | `PodNotes_Settings.json` | **Export** saves your preferences, templates, feeds, playlists, queue, favorites, and playback progress to a file with this name in your vault. Private feeds that PodNotes recognizes keep their placeholder and reference, never their address, and other feed addresses stay as they are. It does not overwrite an existing file. See [Export your settings](/import_export/#export-your-settings). |
 
 ## <span id="search-podcasts"></span><span id="playlists"></span><span id="performance"></span>Settings that moved or were removed
 
-PodNotes 2.22.0 moved these out of the settings tab. [Update to 2.22.0](/upgrade/) lists what else changes when you update.
+PodNotes 2.22.0 moved these out of the settings tab. [Update to 2.22.0](/upgrade/) lists what else changes when you update from 2.21.1 or earlier, and [Update to 2.25.0](/update-2-25/) covers the 2.25.0 transcription update.
 
-| Before 2.22.0 | Now |
+| Earlier name | Now |
 | --- | --- |
 | **Search Podcasts** | **Add podcast** in the PodNotes view. Remove a podcast from its page's **Podcast options** menu. See [Add and play podcasts](/podcasts/). |
 | **Playlists** | The Playlists page in the PodNotes view, with **New playlist**. A new playlist gets the default icon. See [Use the queue and playlists](/playlists/). |
@@ -89,7 +90,7 @@ PodNotes 2.22.0 moved these out of the settings tab. [Update to 2.22.0](/upgrade
 
 These settings have new names:
 
-| Before 2.22.0 | Now |
+| Earlier name | Now |
 | --- | --- |
 | **Skip backward length (s)**, **Skip forward length (s)** | **Skip back (s)**, **Skip forward (s)** |
 | **Default Playback Rate** | **Default speed** |
@@ -98,4 +99,6 @@ These settings have new names:
 | **Note creation file path**, **Note creation template** | **Episode note path**, **Episode note template** |
 | **Feed note file path**, **Feed note template** | **Podcast note path**, **Podcast note template** |
 | **Transcript file path** | **Transcript path** |
+| **Speaker diarization** | **Speaker labels** |
+| **Diarization provider** | **Transcription provider** and **Model** |
 | **Episode download path** | **Download path** |

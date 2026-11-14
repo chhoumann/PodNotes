@@ -4,7 +4,7 @@ slug: upgrade
 description: What changes when you update from PodNotes 2.21.1 to 2.22.0, and what to do on each device.
 ---
 
-Update from PodNotes 2.21.1 or earlier to 2.22.0 without losing your library. PodNotes 2.22.0 redesigns the PodNotes view, the player, and the settings, and changes how your devices share one library. Go through the sections below in order.
+Update from PodNotes 2.21.1 or earlier to 2.22.0 without losing your library. PodNotes 2.22.0 redesigns the PodNotes view, the player, and the settings, and changes how your devices share one library. Go through the sections below in order, then see [Update to 2.25.0](/update-2-25/) for the 2.25.0 transcription update.
 
 ## Update every device first
 

@@ -74,12 +74,10 @@ async function evaluate(code) {
 	return output.slice(3);
 }
 
-const WATCH = `(() => {
+/** @param {[number, number, string][]} turns */
+const watchSource = (turns) => `(() => {
 	const previous = window.__podnotesVerifyNet;
-	if (previous) {
-		previous.entries.length = 0;
-		return "reset";
-	}
+	if (previous) previous.restore();
 	const entries = [];
 	// Other hosts log only their origin, because a private feed's path can hold its token.
 	const pathHosts = new Set(${jsLiteral(PATH_HOSTS)});
@@ -91,8 +89,10 @@ const WATCH = `(() => {
 			return "(unparsable URL)";
 		}
 	};
-	const text = ${jsLiteral(FIXTURE_TRANSCRIPTION)};
-	// Deepgram's words: one every 0.4 s, the reply 12 s in from a second speaker.
+	const turns = ${jsLiteral(turns)};
+	const text = turns[0][2];
+	const fullText = turns.map(([, , line]) => line).join(" ");
+	// Deepgram's words: one every 0.4 s for each turn.
 	const words = (sentence, speaker, from) => sentence.split(" ").map((word, index) => ({
 		word: word.toLowerCase().replace(/[^a-z]/g, ""),
 		punctuated_word: word,
@@ -100,23 +100,28 @@ const WATCH = `(() => {
 		end: from + index * 0.4 + 0.3,
 		speaker,
 	}));
-	const reply = ${jsLiteral(FIXTURE_REPLY)};
-	const deepgram = { results: { channels: [{ alternatives: [{ words: [...words(text, 0, 0), ...words(reply, 1, 12)] }] }] } };
+	const deepgram = { results: { channels: [{ alternatives: [{ words: turns.flatMap(([from, speaker, line]) => words(line, speaker, from)) }] }] } };
 	// ElevenLabs' words, at the same times, with a spacing item between each two.
 	const scribeWords = (sentence, speaker, from) => words(sentence, speaker, from).flatMap(({ punctuated_word, start, end }, index) => {
 		const word = { text: punctuated_word, type: "word", start, end, speaker_id: "speaker_" + speaker };
 		return index === 0 ? [word] : [{ text: " ", type: "spacing", start, end: start, speaker_id: word.speaker_id }, word];
 	});
-	const elevenlabs = { language_code: "eng", text: text + " " + reply, words: [...scribeWords(text, 0, 0), ...scribeWords(reply, 1, 12)] };
+	const elevenlabs = { language_code: "eng", text: fullText, words: turns.flatMap(([from, speaker, line]) => scribeWords(line, speaker, from)) };
 	// OpenRouter's verbose_json words, at the same times, with numbered speakers.
 	const openRouterWords = (sentence, speaker, from) => words(sentence, speaker, from).map(({ punctuated_word, start, end }) => ({ word: punctuated_word, start, end, speaker, speaker_label: "speaker_" + speaker, confidence: 0.99 }));
-	const openrouter = { text: text + " " + reply, words: [...openRouterWords(text, 0, 0), ...openRouterWords(reply, 1, 12)] };
+	const openrouter = { text: fullText, words: turns.flatMap(([from, speaker, line]) => openRouterWords(line, speaker, from)) };
 	// Voxtral times segments and refuses word times; Qwen3 ASR times words and labels no speaker.
 	const plainOpenRouter = {
 		"mistralai/voxtral-mini-transcribe-3-0": (form) =>
 			form.has("timestamp_granularities[]")
 				? Promise.reject({ status: 400, json: { error: { message: "Provider returned 400", code: 400 } } })
-				: { text: openrouter.text, segments: [{ id: 0, start: 0, end: 2.7, text: " " + text }, { id: 1, start: 12, end: 13.5, text: " " + reply }] },
+				: {
+						text: openrouter.text,
+						segments: turns.map(([from, , line], id) => {
+							const turnWords = words(line, 0, from);
+							return { id, start: from, end: Math.round(turnWords[turnWords.length - 1].end * 10) / 10, text: " " + line };
+						}),
+					},
 		"qwen/qwen3-asr-1.7b": () => ({ text: openrouter.text, words: openrouter.words.map(({ word, start, end }) => ({ word, start, end })) }),
 	};
 	const openrouterCatalog = { data: ${jsLiteral(OPENROUTER_MODELS)}.map((id) => ({ id, expiration_date: null })) };
@@ -209,7 +214,7 @@ const WATCH = `(() => {
 		return originalSend.call(ipc, channel, replyChannel, request, ...rest);
 	};
 	window.__podnotesVerifyNet = { entries, restore: () => { window.fetch = originalFetch; ipc.send = originalSend; } };
-	return "watching";
+	return previous ? "reset" : "watching";
 })()`;
 
 const LOG = `JSON.stringify(window.__podnotesVerifyNet?.entries ?? null)`;
@@ -220,15 +225,23 @@ const UNWATCH = `(() => {
 	return "restored";
 })()`;
 
-const [verb] = process.argv.slice(2);
+/** @type {[number, number, string][]} */
+const DEFAULT_TURNS = [
+	[0, 0, FIXTURE_TRANSCRIPTION],
+	[12, 1, FIXTURE_REPLY],
+];
+
+const [verb, flag, value] = process.argv.slice(2);
 try {
-	if (verb === "watch") console.log(await evaluate(WATCH));
-	else if (verb === "log") {
+	if (verb === "watch") {
+		const turns = flag === "--turns" && value ? JSON.parse(value) : DEFAULT_TURNS;
+		console.log(await evaluate(watchSource(turns)));
+	} else if (verb === "log") {
 		const entries = JSON.parse(await evaluate(LOG));
 		if (entries === null) throw new Error("Not watching: run net.mjs watch first.");
 		for (const entry of entries) console.log(JSON.stringify(entry));
 	} else if (verb === "unwatch") console.log(await evaluate(UNWATCH));
-	else throw new Error("Usage: net.mjs watch | log | unwatch");
+	else throw new Error("Usage: net.mjs watch [--turns <json>] | log | unwatch");
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));
 	process.exitCode = 1;

@@ -108,8 +108,8 @@ PodNotes finds the show in the Apple Podcasts directory and the episode on pod.l
 
 Saves a transcript of the loaded episode at **Transcript path**. For a podcast you added, when the episode's feed lists a transcript in a format that PodNotes reads, PodNotes saves that one, with no API key. Otherwise, it transcribes the audio with the selected provider. It works for podcast episodes and local audio, but not for video.
 If the transcript file already exists, PodNotes keeps it and does not transcribe again.
-If PodNotes needs to transcribe the audio but this device has no API key for the selected provider, the command transcribes nothing and shows a notice that names the key to add. See [Transcribe episodes](/transcripts/).
+If PodNotes needs to transcribe the audio before the selected provider is set up on this device, the command transcribes nothing and shows a notice naming the missing API key, **Server address**, or **Model**. See [Transcribe episodes](/transcripts/).
 
 ## Transcribe current episode from audio
 
-Transcribes the audio of the loaded episode with the selected provider and your API key, even when the feed publishes a transcript. Your provider bills your account for it. Otherwise it works like [Transcribe current episode](/commands/#transcribe-current-episode).
+Transcribes the audio of the loaded episode with the selected provider, even when the feed publishes a transcript. Cloud providers bill your own account for it, and **OpenAI-compatible server** sends the audio to **Server address**. Otherwise it works like [Transcribe current episode](/commands/#transcribe-current-episode).
