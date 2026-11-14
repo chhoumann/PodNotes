@@ -51,11 +51,16 @@ import {
 	parseImport,
 	serializeSettings,
 } from "src/settingsTransfer";
-import type { CredentialKind, CredentialValues } from "src/types/Credentials";
+import {
+	CREDENTIAL_KINDS,
+	CREDENTIALS,
+	type CredentialKind,
+	type CredentialSettingsKey,
+	type CredentialValues,
+} from "src/types/Credentials";
 import { observePersistedStoreChanges } from "src/store/persistence";
 import { PLAYBACK_RATES } from "src/utility/playbackRate";
 
-type SecretReferenceKey = "openAISecretId" | "deepgramSecretId";
 type SettingsControl =
 	| HTMLButtonElement
 	| HTMLInputElement
@@ -225,10 +230,9 @@ function restoreFailedImportChanges(
 	}
 }
 
-const CREDENTIAL_KIND_BY_REFERENCE: Record<SecretReferenceKey, CredentialKind> = {
-	openAISecretId: "openai",
-	deepgramSecretId: "deepgram",
-};
+const CREDENTIAL_KIND_BY_REFERENCE = Object.fromEntries(
+	CREDENTIAL_KINDS.map((kind) => [CREDENTIALS[kind].settingsKey, kind]),
+) as Record<CredentialSettingsKey, CredentialKind>;
 
 function stackSettingVertically(setting: Setting): void {
 	setting.settingEl.setCssStyles({
@@ -242,10 +246,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
 	private settingsMutationTail: Promise<void> = Promise.resolve();
-	private credentialSaveGenerations: Record<SecretReferenceKey, number> = {
-		openAISecretId: 0,
-		deepgramSecretId: 0,
-	};
+	private readonly credentialSaveGenerations = new Map<CredentialSettingsKey, number>();
 	private settingsInteractionLockCount = 0;
 	private settingsControlDisabledStates = new Map<SettingsControl, boolean>();
 	private readonly drafts = new Set<() => void>();
@@ -348,7 +349,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				}),
 			]),
 			group("Transcripts", [
-				this.secretRow("OpenAI API key", "openAISecretId"),
+				this.secretRow("openai"),
 				this.textRow("Transcript path", {
 					...this.text((settings) => settings.transcript, "path"),
 					preview: pathPreview(FilePathTemplateEngine),
@@ -381,7 +382,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					({ enabled }) => enabled,
 				),
 				this.whenDiarizing(
-					this.secretRow("Deepgram API key", "deepgramSecretId"),
+					this.secretRow("deepgram"),
 					({ enabled, provider }) => enabled && provider === "deepgram",
 				),
 				this.whenDiarizing(
@@ -693,16 +694,14 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		};
 	}
 
-	private secretRow(name: string, key: SecretReferenceKey): SettingDefinitionRender {
+	private secretRow(kind: CredentialKind): SettingDefinitionRender {
+		const { settingsKey: key, label } = CREDENTIALS[kind];
 		return {
-			name,
+			name: `${label} API key`,
 			render: (setting) => {
 				const describe = () =>
 					setting.setDesc(
-						this.plugin.credentials.status(
-							this.plugin.settings,
-							CREDENTIAL_KIND_BY_REFERENCE[key],
-						) === "missing"
+						this.plugin.credentials.status(this.plugin.settings, kind) === "missing"
 							? "The selected secret is not available on this device. Select an existing secret or create one."
 							: "",
 					);
@@ -1123,22 +1122,23 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private async saveSecretReference(
-		key: SecretReferenceKey,
+		key: CredentialSettingsKey,
 		selectedId: string | null,
 	): Promise<SecretReferenceSaveResult> {
-		const generation = ++this.credentialSaveGenerations[key];
+		const generation = (this.credentialSaveGenerations.get(key) ?? 0) + 1;
+		this.credentialSaveGenerations.set(key, generation);
 		const operation = this.enqueueSettingsMutation(() =>
 			this.persistSecretReference(key, selectedId),
 		);
 		const result = await operation;
 		return {
 			...result,
-			isLatest: generation === this.credentialSaveGenerations[key],
+			isLatest: generation === this.credentialSaveGenerations.get(key),
 		};
 	}
 
 	private async persistSecretReference(
-		key: SecretReferenceKey,
+		key: CredentialSettingsKey,
 		selectedId: string | null,
 	): Promise<Omit<SecretReferenceSaveResult, "isLatest">> {
 		const previous = this.plugin.settings[key];
@@ -1189,7 +1189,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 	}
 
 	private async handleSecretSelection(
-		key: SecretReferenceKey,
+		key: CredentialSettingsKey,
 		selectedId: string | null,
 		secret: Pick<SecretComponent, "setValue">,
 		onLatestSettled: () => void,
