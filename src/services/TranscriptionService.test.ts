@@ -1628,7 +1628,7 @@ describe("TranscriptionService", () => {
 				);
 			});
 
-			test("a voice whose turns are all under 2.6 s gets no clip and keeps its own number", async () => {
+			test("a voice whose turns are all under 2.6 s gets no clip, keeps its own number, and the notice says labels restart in each", async () => {
 				// Cy speaks 2.016 s, after Ann in the second part.
 				getEpisodeAudioBufferMock.mockResolvedValue(
 					episode([...TURNS, { voice: CY, from: 23_334, to: 23_362 }]),
@@ -1645,7 +1645,7 @@ describe("TranscriptionService", () => {
 					"1 Ann",
 					"3 Cy",
 				]);
-				expect(notice).toBe("Transcription completed and saved.");
+				expect(notice).toBe(RESTART);
 				expect(sent()).toHaveLength(3);
 				const reelVoices = framesOf(await sentAudio(sent()[2])).map((frame) =>
 					frame === "silence" ? 0 : frame.voice,
@@ -1673,10 +1673,11 @@ describe("TranscriptionService", () => {
 				);
 				const plugin = grok();
 
-				await transcribe(plugin);
+				const notice = await finalNotice(plugin);
 
 				expect(sent()).toHaveLength(3);
 				expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Cy", "1 Ann"]);
+				expect(notice).toBe(RESTART);
 			});
 
 			test("a reel OpenRouter refuses keeps the parts' labels, saves the note and says labels restart", async () => {
