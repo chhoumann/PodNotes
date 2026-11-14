@@ -6,8 +6,9 @@ import type { Episode } from "./Episode";
 import type DownloadedEpisode from "./DownloadedEpisode";
 import type { DiarizationProviderId } from "src/services/diarization/types";
 import type { NextTrackAction, PreviousTrackAction } from "./Headset";
+import type { CredentialReferenceSettings } from "./Credentials";
 
-export interface IPodNotesSettings {
+export interface IPodNotesSettings extends CredentialReferenceSettings {
 	savedFeeds: { [podcastName: string]: PodcastFeed };
 	podNotes: { [episodeName: string]: PodNote };
 	defaultPlaybackRate: number;
@@ -59,10 +60,6 @@ export interface IPodNotesSettings {
 		path: string;
 	};
 	downloadedEpisodes: { [podcastName: string]: DownloadedEpisode[] };
-	/** SecretStorage ID for the OpenAI API key. Never contains the key itself. */
-	openAISecretId: string;
-	/** SecretStorage ID for the Deepgram API key. Never contains the key itself. */
-	deepgramSecretId: string;
 	transcript: {
 		path: string;
 		template: string;

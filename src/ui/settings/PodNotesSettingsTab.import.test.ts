@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS } from "src/constants";
 import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
 import PodNotes from "src/main";
 import { PlayerController } from "src/player/PlayerController";
+import { CredentialRepository } from "src/services/CredentialRepository";
 import { episodeListLimit, hidePlayedEpisodes, savedFeeds } from "src/store";
 import { bindStoresToSettings } from "src/store/persistence";
 import type { Episode } from "src/types/Episode";
@@ -378,6 +379,36 @@ describe("PodNotesSettingsTab settings import", () => {
 		expect(notice.mock.calls).toEqual([
 			["Could not save the API key selection. The previous selection was kept.", 0],
 		]);
+	});
+
+	it("copies a secret selected in each key row into that row's provider ID", async () => {
+		const storage = new obsidian.SecretStorage();
+		storage.setSecret("shared-api-key", "shared-value");
+		const plugin = {
+			settings: structuredClone(DEFAULT_SETTINGS),
+			credentials: new CredentialRepository(storage),
+			saveSettingsStrict: vi.fn().mockResolvedValue(undefined),
+		} as unknown as PodNotes;
+		const tab = new PodNotesSettingsTab({} as App, withPlayer(plugin));
+		const secret = { setValue: vi.fn() };
+		const select = (
+			tab as unknown as {
+				handleSecretSelection: (
+					key: "openAISecretId" | "deepgramSecretId",
+					value: string,
+					component: typeof secret,
+					onSettled: () => void,
+				) => Promise<void>;
+			}
+		).handleSecretSelection.bind(tab);
+
+		await select("openAISecretId", "shared-api-key", secret, vi.fn());
+		await select("deepgramSecretId", "shared-api-key", secret, vi.fn());
+
+		expect(plugin.settings.openAISecretId).toBe("podnotes-openai-api-key");
+		expect(plugin.settings.deepgramSecretId).toBe("podnotes-deepgram-api-key");
+		expect(storage.getSecret("podnotes-openai-api-key")).toBe("shared-value");
+		expect(storage.getSecret("podnotes-deepgram-api-key")).toBe("shared-value");
 	});
 
 	it("keeps a newer selection authoritative when an older save fails", async () => {
