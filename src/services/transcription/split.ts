@@ -101,9 +101,10 @@ function mp3PartStarts(
 	maxBytes: number,
 	maxSeconds: number,
 ): { offset: number; seconds: number }[] {
-	// Frames in one stream last equally long, so counting frames keeps every part under
-	// maxSeconds without a one-frame tail from rounding.
-	const framesPerCap = frames.length > 0 ? Math.floor(maxSeconds / frames[0].seconds) : Infinity;
+	// Frames in one stream last equally long, so parts are counted in frames: summing frame
+	// durations drifts past maxSeconds and would split off a one-frame tail.
+	const framesPerCap =
+		frames.length > 0 ? Math.floor(maxSeconds / frames[0].seconds + 1e-9) : Infinity;
 	const parts = Math.max(
 		Math.ceil(byteLength / maxBytes),
 		Math.ceil(frames.length / framesPerCap),
@@ -112,19 +113,15 @@ function mp3PartStarts(
 	const starts = [{ offset: 0, seconds: 0 }];
 	let elapsed = 0;
 	let partFrames = 0;
-	let partSeconds = 0;
 	for (const frame of frames) {
 		if (
 			partFrames === framesPerPart ||
-			frame.offset + frame.length - starts[starts.length - 1].offset > maxBytes ||
-			partSeconds + frame.seconds > maxSeconds
+			frame.offset + frame.length - starts[starts.length - 1].offset > maxBytes
 		) {
 			starts.push({ offset: frame.offset, seconds: elapsed });
 			partFrames = 0;
-			partSeconds = 0;
 		}
 		partFrames++;
-		partSeconds += frame.seconds;
 		elapsed += frame.seconds;
 	}
 	return starts;

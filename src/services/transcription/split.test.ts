@@ -122,6 +122,19 @@ describe("an MP3 over a cap", () => {
 		expect(joinsInto(parts, episode)).toBe(true);
 	});
 
+	test("an MP3 one frame short of two full parts splits into two, with no one-frame tail", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// 600 s holds 25,000 frames of 24 ms. Summing 0.024 s 25,000 times overshoots 600.
+		const episode = mp3Bytes(stream, 49_999);
+
+		const parts = await split(episode, { maxBytes: 20 * MIB, maxSeconds: 600 });
+
+		expect(parts.map((part) => part.bytes.length / stream.frameBytes)).toEqual([
+			25_000, 24_999,
+		]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
 	test("counts the last frame before trailing metadata, so the last part stays under maxSeconds", async () => {
 		const stream = MP3_STREAMS.mpeg25At8Kbps;
 		// An ID3v1 tag after the last frame. A 72.01 s part holds 1,000 frames, so 2,001 need three parts.
