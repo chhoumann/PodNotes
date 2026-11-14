@@ -862,6 +862,8 @@ describe("TranscriptionService", () => {
 			],
 			["CloudFront", "Expires=1900000000&Signature=SIGNED&Key-Pair-Id=CRED"],
 			["Azure", "sv=2024-11-04&se=2030-01-01&sp=r&sig=SIGNED"],
+			["Akamai query token", "hdnts=exp=1900000000~acl=/*~hmac=SIGNED"],
+			["Akamai cookie token", "hdnea=exp=1900000000~acl=/*~hmac=SIGNED"],
 		])(
 			"an episode whose address is a %s signed URL is uploaded, and no request holds the address",
 			async (_, query) => {

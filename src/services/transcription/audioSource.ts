@@ -25,10 +25,10 @@ export type PublicAudioUrl = string & { readonly [publicAudio]: true };
  */
 /**
  * A query parameter that signs a URL: AWS and Google Cloud's X-Amz- and X-Goog- credential,
- * signature and token, and Akamai's tokens. Matched within the name, so an unknown scheme's
+ * signature and token, and Akamai's hdnts and hdnea tokens. Matched within the name, so an unknown scheme's
  * signature uploads the audio.
  */
-const SIGNED_URL_PARAM = /signature|credential|token|^hdnts$/i;
+const SIGNED_URL_PARAM = /signature|credential|token|^hdn(ts|ea)$/i;
 
 const isSignedUrl = (address: string): boolean =>
 	[...new URL(address).searchParams.keys()].some((name) => SIGNED_URL_PARAM.test(name));
