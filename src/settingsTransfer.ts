@@ -126,12 +126,14 @@ function portable<T extends object>(settings: T): T {
 				: feed,
 		);
 	}
-	// The provider that versions up to 2.24.0 keep beside the speaker settings stays with
-	// the library that stored it. It is stale once the provider changes.
+	// Versions up to 2.24.0 import this object whole and read its provider as their own
+	// speaker-label provider, so it names Deepgram exactly when the library uses Deepgram.
 	if (isPlainObject(out.transcript) && isPlainObject(out.transcript.diarization)) {
-		const diarization = { ...out.transcript.diarization };
-		delete diarization.provider;
-		out.transcript = { ...out.transcript, diarization };
+		const provider = out.transcript.provider === "deepgram" ? "deepgram" : "openai";
+		out.transcript = {
+			...out.transcript,
+			diarization: { ...out.transcript.diarization, provider },
+		};
 	}
 	for (const key of ["queue", "favorites"]) {
 		if (key in out) out[key] = portablePlaylist(out[key]);
@@ -316,11 +318,13 @@ export function mergeImportedSettings(
 			...(imported[key] as object | undefined),
 		} as never;
 	}
-	// The speaker settings a file leaves out stay, as does the provider that versions up
-	// to 2.24.0 store beside them.
+	// Only the speaker settings a file names change. The provider that versions up to
+	// 2.24.0 store beside them stays as this library stored it.
+	const { enabled, speakerTemplate } = imported.transcript?.diarization ?? {};
 	merged.transcript.diarization = {
 		...current.transcript.diarization,
-		...imported.transcript?.diarization,
+		...(enabled === undefined ? {} : { enabled }),
+		...(speakerTemplate === undefined ? {} : { speakerTemplate }),
 	};
 
 	// Converge import and startup on the same deep validators and date revival.

@@ -885,7 +885,7 @@ describe("the transcription provider in a settings file", () => {
 		return mergeImportedSettings(current, parsed.settings);
 	};
 
-	it("exports the provider and model, without the provider field of versions up to 2.24.0", () => {
+	it("exports the provider and model, and gives versions up to 2.24.0 Deepgram only for a Deepgram library", () => {
 		const settings = releasedDeepgramLibrary();
 		settings.transcript.model = "nova-3";
 
@@ -896,8 +896,16 @@ describe("the transcription provider in a settings file", () => {
 			template: released2240.transcript.template,
 			provider: "deepgram",
 			model: "nova-3",
-			diarization: { enabled: true, speakerTemplate: "**{{speaker}}:** " },
+			diarization: {
+				enabled: true,
+				provider: "deepgram",
+				speakerTemplate: "**{{speaker}}:** ",
+			},
 		});
+
+		settings.transcript.provider = "elevenlabs";
+		const { settings: elevenLabs } = serializeSettings(settings, {}, "2.25.0", NOW, new Map());
+		expect(elevenLabs.transcript?.diarization).toMatchObject({ provider: "openai" });
 	});
 
 	it("imports the provider and model a file names, also ones this version does not have", () => {
