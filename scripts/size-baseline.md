@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 104,178 bytes. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 104,235 bytes. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -43,13 +43,14 @@ main.js raw: 320267 bytes; budget 330000 bytes; 9733 bytes remaining
 main.js gzip (level 9): 104145 bytes; budget 104145 bytes; 0 bytes remaining
 ```
 
-On 2026-11-14 it rose from 104,145 by the 118 bytes that measure audio in other
-formats against each model's length cap, so a long `.m4a` under the size cap is
-split instead of sent whole. With it:
+On 2026-11-14 it rose from 104,145 by 175 bytes for the transcription engine:
+118 measure audio in other formats against each model's length cap, so a long
+`.m4a` under the size cap is split instead of sent whole, and 57 keep a signed
+enclosure URL from going to a provider. With them:
 
 ```text
-main.js raw: 319136 bytes; budget 330000 bytes; 10864 bytes remaining
-main.js gzip (level 9): 104178 bytes; budget 104178 bytes; 0 bytes remaining
+main.js raw: 319246 bytes; budget 330000 bytes; 10754 bytes remaining
+main.js gzip (level 9): 104235 bytes; budget 104235 bytes; 0 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
