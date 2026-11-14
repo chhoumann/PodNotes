@@ -463,7 +463,7 @@ describe("Transcripts", () => {
 					: new Response("", { status: 404 }),
 			);
 
-		test("choosing it shows its API key row and its three models, Grok STT 2.0 recommended", async () => {
+		test("choosing it shows its API key row and its five models, Grok STT 2.0 recommended", async () => {
 			const { provider, model, keyButtons, disk } = openTranscripts();
 
 			choose(provider(), "openrouter");
@@ -475,10 +475,36 @@ describe("Transcripts", () => {
 				["x-ai/grok-stt-2.0", "Grok STT 2.0"],
 				["elevenlabs/scribe-v2", "ElevenLabs Scribe v2"],
 				["microsoft/mai-transcribe-2", "MAI-Transcribe 2"],
+				["mistralai/voxtral-mini-transcribe-3-0", "Voxtral Mini Transcribe 3"],
+				["qwen/qwen3-asr-1.7b", "Qwen3 ASR 1.7B"],
 			]);
 			expect(model()).toHaveDisplayValue("Recommended (Grok STT 2.0)");
 			expect((await disk()).transcript).toMatchObject({ provider: "openrouter", model: "" });
 		});
+
+		test.each([
+			["mistralai/voxtral-mini-transcribe-3-0", "Voxtral Mini Transcribe 3"],
+			["qwen/qwen3-asr-1.7b", "Qwen3 ASR 1.7B"],
+		])(
+			"choosing %s says Speaker labels are not available, and choosing Grok STT 2.0 again lifts that",
+			async (id, label) => {
+				const { ui, model, speakerLabels } = openTranscripts(
+					transcript({ provider: "openrouter", ...withSpeakerLabels(true) }),
+				);
+				const reason = `${label} does not label speakers.`;
+				await settled();
+
+				choose(model(), id);
+
+				expect(ui.getByText(reason)).toBeVisible();
+				expect(speakerLabels()).toBeChecked();
+				expect(speakerLabels()).toBeEnabled();
+
+				choose(model(), "x-ai/grok-stt-2.0");
+
+				expect(ui.queryByText(reason)).toBeNull();
+			},
+		);
 
 		test("the catalog read as the row draws leaves out a model it does not list and dates one that ends", async () => {
 			listing({ "x-ai/grok-stt-2.0": "2099-01-31", "microsoft/mai-transcribe-2": null });

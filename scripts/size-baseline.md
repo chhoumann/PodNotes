@@ -13,6 +13,9 @@ main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
 The gzip budget is now 107,865 bytes and the raw budget 333,293. On 2026-10-14 it rose from 100,000 for
+```
+
+The gzip budget is now 107,181 bytes. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -74,6 +77,24 @@ them:
 ```text
 main.js raw: 330739 bytes; budget 333293 bytes; 2554 bytes remaining
 main.js gzip (level 9): 107768 bytes; budget 107865 bytes; 97 bytes remaining
+```
+
+Later on 2026-11-14 it rose from 106,970 for Voxtral Mini Transcribe 3 and
+Qwen3 ASR 1.7B on OpenRouter. The branch it builds on measured 106,873 bytes.
+The two models and the segment times Voxtral answers with measured 211 more.
+The budget rose by those 211 bytes. With them:
+
+```text
+main.js raw: 328174 bytes; budget 330000 bytes; 1826 bytes remaining
+main.js gzip (level 9): 107084 bytes; budget 107181 bytes; 97 bytes remaining
+```
+
+It then rose by 100 bytes for restoring Qwen3 ASR's punctuation from its text.
+With them:
+
+```text
+main.js raw: 328482 bytes; budget 330000 bytes; 1518 bytes remaining
+main.js gzip (level 9): 107184 bytes; budget 107281 bytes; 97 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.

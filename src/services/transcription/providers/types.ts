@@ -33,11 +33,19 @@ export interface Word {
 	readonly speaker?: string;
 }
 
-/**
- * What one request gave back: timed words, or text from a model that returns no times. A
- * model that times only its segments gives each segment as one word.
- */
-export type PartTranscript = { readonly words: readonly Word[] } | { readonly text: string };
+/** A stretch of speech, such as a sentence, from a model that times no single word. */
+export interface Segment {
+	readonly text: string;
+	/** Seconds from the start of the audio this request carried. */
+	readonly start: number;
+	readonly end: number;
+}
+
+/** What one request gave back: timed words or segments, or text from a model that returns no times. */
+export type PartTranscript =
+	| { readonly words: readonly Word[] }
+	| { readonly segments: readonly Segment[] }
+	| { readonly text: string };
 
 export type AudioInput = { readonly url: PublicAudioUrl } | { readonly file: File };
 
