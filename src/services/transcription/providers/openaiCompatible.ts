@@ -1,7 +1,7 @@
 import { isPlainObject } from "src/persistence/codecUtils";
 import { isFetchableUrl } from "src/utility/assertFetchableUrl";
-import { TranscriptionError } from "../http";
-import type { PartTranscript, Provider, Word } from "./types";
+import type { Provider } from "./types";
+import { verboseJsonTimes } from "./verboseJson";
 
 const PATH = "/audio/transcriptions";
 
@@ -21,62 +21,35 @@ export const openaiCompatible: Provider = {
 		return isFetchableUrl(endpoint, { privateHosts: true }) ? endpoint : undefined;
 	},
 
-	async transcribe({ apiKey, model, audio, endpoint }, send) {
+	async transcribe({ apiKey, model, audio, endpoint, textOnly }, send) {
 		if (!endpoint || "url" in audio) {
 			throw new Error("An OpenAI-compatible server takes an uploaded file at its endpoint.");
 		}
-		const request = (timed: boolean) => {
-			const form = new FormData();
-			form.append("model", model.id);
-			form.append("file", audio.file);
-			form.append("response_format", timed ? "verbose_json" : "json");
-			if (timed) {
-				form.append("timestamp_granularities[]", "word");
-				form.append("timestamp_granularities[]", "segment");
-			}
-			return send({
-				url: endpoint,
-				headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-				body: form,
-			});
-		};
-		try {
-			return readTranscription(await request(true));
-		} catch (error) {
-			if (!(error instanceof TranscriptionError) || error.kind !== "format") throw error;
-			return readTranscription(await request(false));
+		const form = new FormData();
+		form.append("model", model.id);
+		form.append("file", audio.file);
+		form.append("response_format", textOnly ? "json" : "verbose_json");
+		if (!textOnly) {
+			form.append("timestamp_granularities[]", "word");
+			form.append("timestamp_granularities[]", "segment");
 		}
+		const answer = await send({
+			url: endpoint,
+			headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+			body: form,
+		});
+		return (
+			verboseJsonTimes(answer) ?? {
+				text: isPlainObject(answer) && typeof answer.text === "string" ? answer.text : "",
+			}
+		);
 	},
 
 	// A model without times, such as OpenAI's gpt-transcribe, refuses verbose_json with a 400
-	// that names the option, and answers json.
+	// that names the option, and answers json, which the job asks for from then on.
 	failure: (status, body) =>
 		status === 400 &&
 		/response_format|verbose_json|timestamp_granularities/i.test(JSON.stringify(body))
 			? "format"
 			: undefined,
 };
-
-/**
- * An answer in OpenAI's transcription shapes: verbose_json's words, or its segments when it
- * has no words, or the text of json.
- */
-function readTranscription(answer: unknown): PartTranscript {
-	if (!isPlainObject(answer)) return { text: "" };
-	const words = timed(answer.words, "word");
-	if (words.length > 0) return { words };
-	const segments = timed(answer.segments, "text");
-	if (segments.length > 0) return { words: segments };
-	return { text: typeof answer.text === "string" ? answer.text : "" };
-}
-
-function timed(items: unknown, textKey: "word" | "text"): Word[] {
-	if (!Array.isArray(items)) return [];
-	return items.flatMap((item: unknown): Word[] => {
-		if (!isPlainObject(item)) return [];
-		const { [textKey]: text, start, end } = item;
-		return typeof text === "string" && typeof start === "number" && typeof end === "number"
-			? [{ text, start, end }]
-			: [];
-	});
-}

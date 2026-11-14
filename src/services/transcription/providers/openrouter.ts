@@ -2,16 +2,8 @@ import { arrayBufferToBase64 } from "obsidian";
 import { isPlainObject } from "src/persistence/codecUtils";
 import type { NonEmpty } from "src/services/publishedTranscript/parse";
 import { fetchJsonWithTimeout } from "src/utility/networkRequest";
-import type {
-	Listing,
-	ModelProfile,
-	PartInput,
-	PartTranscript,
-	Provider,
-	ProviderRequest,
-	Segment,
-	Word,
-} from "./types";
+import type { Listing, ModelProfile, PartInput, Provider, ProviderRequest } from "./types";
+import { verboseJsonTimes } from "./verboseJson";
 
 const TRANSCRIPTIONS_URL = "https://openrouter.ai/api/v1/audio/transcriptions";
 const CATALOG_URL = "https://openrouter.ai/api/v1/models?output_modalities=transcription";
@@ -146,13 +138,13 @@ export const openrouter: Provider = {
 	async transcribe(input, send) {
 		const model = MODELS.find(({ id }) => id === input.model.id);
 		if (!model) throw new Error(`OpenRouter has no ${input.model.id} request.`);
-		return parse(
-			await send({
-				url: TRANSCRIPTIONS_URL,
-				headers: { Authorization: `Bearer ${input.apiKey}` },
-				body: await model.body(input),
-			}),
-		);
+		const answer = await send({
+			url: TRANSCRIPTIONS_URL,
+			headers: { Authorization: `Bearer ${input.apiKey}` },
+			body: await model.body(input),
+		});
+		// An answer with neither words nor segments holds no speech.
+		return verboseJsonTimes(answer) ?? { words: [] };
 	},
 
 	failure(status, body) {
@@ -185,68 +177,3 @@ export const openrouter: Provider = {
 		return listing satisfies Listing;
 	},
 };
-
-/** Words when the answer lists them, else its segments. An answer with neither holds no speech. */
-function parse(answer: unknown): PartTranscript {
-	if (!isPlainObject(answer)) return { words: [] };
-	const { words, segments } = answer;
-	if (!Array.isArray(words)) {
-		return { segments: Array.isArray(segments) ? segments.flatMap(segmentOf) : [] };
-	}
-	return {
-		words: punctuated(
-			words.flatMap((item: unknown): Word[] => {
-				// Scribe v2 also lists sounds, such as "[gentle music]", as `audio_event` items.
-				if (!isPlainObject(item) || (item.type ?? "word") !== "word") return [];
-				const { word: text, start, end, speaker } = item;
-				if (
-					typeof text !== "string" ||
-					typeof start !== "number" ||
-					typeof end !== "number"
-				) {
-					return [];
-				}
-				return [
-					{
-						text,
-						start,
-						end,
-						speaker:
-							typeof speaker === "number" || typeof speaker === "string"
-								? `${speaker}`
-								: undefined,
-					},
-				];
-			}),
-			answer.text,
-		),
-	};
-}
-
-/**
- * Qwen3 ASR lists its words without punctuation and keeps the punctuation in `text`, so
- * each word takes its token from `text` when the two spell it alike.
- */
-function punctuated(words: Word[], text: unknown): Word[] {
-	if (typeof text !== "string" || words.some((word) => /[.,?!]/.test(word.text))) return words;
-	const tokens = text.split(/\s+/).filter(Boolean);
-	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
-	let next = 0;
-	return words.map((word) => {
-		// A few tokens of lookahead get past a word `text` spells differently.
-		for (let index = next; index < Math.min(tokens.length, next + 3); index++) {
-			if (bare(tokens[index]) !== bare(word.text)) continue;
-			next = index + 1;
-			return { ...word, text: tokens[index] };
-		}
-		return word;
-	});
-}
-
-function segmentOf(item: unknown): Segment[] {
-	if (!isPlainObject(item)) return [];
-	const { text, start, end } = item;
-	return typeof text === "string" && typeof start === "number" && typeof end === "number"
-		? [{ text, start, end }]
-		: [];
-}

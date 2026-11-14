@@ -2141,6 +2141,49 @@ describe("TranscriptionService", () => {
 			expect(providerMock).toHaveBeenCalledTimes(2);
 		});
 
+		test("after a server refuses verbose_json, the episode's next part is sent once, as json", async () => {
+			const plugin = useServer();
+			const stream = MP3_STREAMS.mpeg1At96Kbps;
+			const frames = Math.ceil(30_000_000 / stream.frameBytes);
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: mp3Bytes(stream, frames).buffer,
+				extension: "mp3",
+			});
+			providerMock.mockImplementation(async (request) =>
+				(await responseFormat(request)) === "verbose_json"
+					? verboseRefused()
+					: Response.json({ text: "Hello there." }),
+			);
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+
+			const requests = providerMock.mock.calls.map(([request]) => request);
+			const formats = await Promise.all(requests.map(responseFormat));
+			const sizes = await Promise.all(
+				requests.map(async (request) => (await sentFile(request)).size),
+			);
+			expect(formats).toEqual(["verbose_json", "json", "json"]);
+			expect(sizes[1]).toBe(sizes[0]);
+			expect(sizes[1] + sizes[2]).toBe(frames * stream.frameBytes);
+		});
+
+		test("words a server lists without punctuation take their punctuation from its text", async () => {
+			providerMock.mockImplementation(async () =>
+				Response.json({
+					...verbose,
+					words: verbose.words.map((word) => ({
+						...word,
+						word: word.word.replace(/[.!]/, ""),
+					})),
+				}),
+			);
+			const plugin = useServer();
+
+			await transcribe(plugin);
+
+			expect(savedNote(plugin)).toBe(timedNote);
+		});
+
 		test("a 400 about anything else is not sent again", async () => {
 			providerMock.mockImplementation(async () =>
 				Response.json(

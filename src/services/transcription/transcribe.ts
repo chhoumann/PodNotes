@@ -54,8 +54,20 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	};
 	const send = createSender(provider.failure, context, signal);
 	const speakers = choice.speakers && model.speakers;
-	const transcribeOne = (audio: AudioInput) =>
-		provider.transcribe({ apiKey, model, speakers, audio, endpoint }, send);
+	let textOnly = false;
+	const transcribeOne = async (audio: AudioInput) => {
+		const request = () =>
+			provider.transcribe({ apiKey, model, speakers, audio, endpoint, textOnly }, send);
+		try {
+			return await request();
+		} catch (error) {
+			// A server that refuses a request for times is asked for text alone, for this part
+			// and every later one.
+			if (!(error instanceof TranscriptionError) || error.kind !== "format") throw error;
+			textOnly = true;
+			return request();
+		}
+	};
 	const progress = `Transcribing with ${choice.label}...`;
 
 	const parts: TranscribedPart[] = [];

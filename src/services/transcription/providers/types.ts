@@ -59,6 +59,8 @@ export interface PartInput {
 	readonly audio: AudioInput;
 	/** Where requests go, for a provider with an `endpoint`. */
 	readonly endpoint?: string;
+	/** Ask for text without times, after this job's server refused a request for them. */
+	readonly textOnly: boolean;
 }
 
 export interface ProviderRequest {
