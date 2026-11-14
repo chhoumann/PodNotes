@@ -2,7 +2,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { Notice, type RequestUrlParam } from "obsidian";
 import { deferred } from "../../tests/mocks/feeds";
-import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";
+import { OPENAI_FAILURES, OPENAI_REJECTIONS, rateLimited } from "../../tests/mocks/openaiFailures";
 import {
 	createMockPlugin,
 	diarizeWithDeepgramMock,
@@ -11,6 +11,7 @@ import {
 	mockEpisode,
 	noticeMessages,
 } from "../../tests/mocks/transcriptionService";
+import { MP3_STREAMS, mp3Bytes, mp3Seconds } from "../../tests/mocks/mp3";
 import { openAIMock, sentForm } from "../../tests/mocks/openaiRequestUrl";
 import { TranscriptionService } from "./TranscriptionService";
 import type PodNotes from "src/main";
@@ -522,6 +523,18 @@ describe("TranscriptionService", () => {
 			},
 		);
 
+		test.each(OPENAI_REJECTIONS)(
+			"Whisper %s shows the API error after one send",
+			async (_name, respond, message) => {
+				openAIMock.mockImplementation(respond);
+
+				await expect(finalNotice(createMockPlugin())).resolves.toBe(
+					`Transcription failed: all 1 audio chunk(s) failed or returned no text. Last error: ${message}`,
+				);
+				expect(openAIMock).toHaveBeenCalledOnce();
+			},
+		);
+
 		test("Whisper answering without text fails the run after three sends", async () => {
 			openAIMock.mockImplementation(async () => Response.json({}));
 
@@ -627,5 +640,62 @@ describe("TranscriptionService", () => {
 				expect(openAIMock).toHaveBeenCalledTimes(3);
 			},
 		);
+
+		test.each(OPENAI_REJECTIONS)(
+			"OpenAI diarization %s shows the API error after one send",
+			async (_name, respond, message) => {
+				openAIMock.mockImplementation(respond);
+				const plugin = createMockPlugin();
+				plugin.settings.transcript.diarization = {
+					enabled: true,
+					provider: "openai",
+					speakerTemplate: "**{{speaker}}:** {{text}}",
+				};
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					`Transcription failed: OpenAI diarization failed for every chunk: ${message}`,
+				);
+				expect(openAIMock).toHaveBeenCalledOnce();
+			},
+		);
+
+		test("OpenAI diarization parts stay under the model's 1400 s limit and answer inside the 10 min request timeout (#532)", async () => {
+			// Measured on gpt-4o-transcribe-diarize: the slowest of 81 requests took 0.58 s per second of audio.
+			const slowestSecondsPerAudioSecond = 0.58;
+			const stream = MP3_STREAMS.mpeg25At8Kbps;
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: mp3Bytes(stream, 44_667).buffer,
+				extension: "mp3",
+				basename: "episode",
+			});
+			const sentSeconds: number[] = [];
+			openAIMock.mockImplementation(async (request: RequestUrlParam) => {
+				const seconds = mp3Seconds(stream, (await sentFile(request)).size);
+				sentSeconds.push(seconds);
+				return seconds > 1400
+					? Response.json(
+							{
+								error: {
+									message: `audio duration ${seconds} seconds is longer than 1400 seconds which is the maximum for this model`,
+								},
+							},
+							{ status: 400 },
+						)
+					: Response.json({
+							segments: [{ speaker: "A", text: `${seconds} s.`, start: 0, end: 1 }],
+						});
+			});
+			const plugin = createMockPlugin();
+			plugin.settings.transcript.diarization = {
+				enabled: true,
+				provider: "openai",
+				speakerTemplate: "**{{speaker}}:** {{text}}",
+			};
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+			expect(Math.max(...sentSeconds)).toBeLessThanOrEqual(1400);
+			expect(Math.max(...sentSeconds) * slowestSecondsPerAudioSecond).toBeLessThan(10 * 60);
+			expect(sentSeconds.reduce((total, seconds) => total + seconds)).toBeCloseTo(3216.024);
+		});
 	});
 });

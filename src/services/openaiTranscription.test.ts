@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OPENAI_FAILURES, rateLimited } from "../../tests/mocks/openaiFailures";
+import { OPENAI_FAILURES, OPENAI_REJECTIONS, rateLimited } from "../../tests/mocks/openaiFailures";
 import { corsBlockedFetch, openAIMock, sentForm } from "../../tests/mocks/openaiRequestUrl";
 import { createTranscription, retryDelayMs } from "./openaiTranscription";
 
@@ -93,12 +93,12 @@ describe("createTranscription", () => {
 		await expect(send()).resolves.toEqual(payload);
 	});
 
-	it.each([...OPENAI_FAILURES, ...EDGE_FAILURES])(
+	it.each([...OPENAI_FAILURES, ...OPENAI_REJECTIONS, ...EDGE_FAILURES])(
 		"%s rejects with the openai SDK's message after one send",
 		async (_name, respond, message) => {
 			openAIMock.mockImplementation(respond);
 
-			await expect(send()).rejects.toThrow(new Error(message));
+			await expect(send()).rejects.toHaveProperty("message", message);
 			expect(openAIMock).toHaveBeenCalledOnce();
 		},
 	);

@@ -4,10 +4,12 @@ import {
 	CHUNK_SIZE_BYTES,
 	createBinaryChunkFiles,
 	createChunkFiles,
+	mp3ChunkEnds,
 	getMimeType,
 	shouldConvertToWav,
 	writeWavHeader,
 } from "./audioChunker";
+import { MP3_STREAMS, mp3Bytes, mp3Seconds } from "../../tests/mocks/mp3";
 
 describe("getMimeType", () => {
 	test("returns correct mime types for audio formats", () => {
@@ -167,6 +169,368 @@ describe("createChunkFiles small-file fast path (#168 / PR #204 review)", () => 
 			expect(files).toHaveLength(1);
 			expect(files[0].name).toBe(`episode.${extension}`);
 		}
+	});
+});
+
+describe("createChunkFiles with maxSeconds (#532)", () => {
+	const chunk = async (bytes: Uint8Array, maxSeconds: number) =>
+		Promise.all(
+			(
+				await createChunkFiles({
+					buffer: bytes.buffer as ArrayBuffer,
+					basename: "episode",
+					extension: "mp3",
+					mimeType: "audio/mp3",
+					maxSeconds,
+				})
+			).map(async (file) => ({
+				name: file.name,
+				bytes: new Uint8Array(await file.arrayBuffer()),
+			})),
+		);
+	const joinsInto = (parts: { bytes: Uint8Array }[], episode: Uint8Array) =>
+		Buffer.concat(parts.map((part) => part.bytes)).equals(episode);
+
+	test("splits an MP3 under the size limit into equal parts no longer than maxSeconds", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		const episode = mp3Bytes(stream, 134_000);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts.map((part) => part.name)).toEqual([
+			"episode.part0.mp3",
+			"episode.part1.mp3",
+			"episode.part2.mp3",
+		]);
+		expect(parts.map((part) => part.bytes.length / stream.frameBytes)).toEqual([
+			44_667, 44_667, 44_666,
+		]);
+		expect(mp3Seconds(stream, parts[0].bytes.length)).toBeLessThanOrEqual(1400);
+		for (const part of parts)
+			expect(Array.from(part.bytes.subarray(0, 4))).toEqual(stream.header);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("sends an MP3 that fits both limits as the original file", async () => {
+		const episode = mp3Bytes(MP3_STREAMS.mpeg1At96Kbps, 58_000);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts.map((part) => part.name)).toEqual(["episode.mp3"]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("keeps parts under the size limit when it is the tighter one", async () => {
+		const stream = MP3_STREAMS.mpeg1At320Kbps;
+		const episode = mp3Bytes(stream, 50_000);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts).toHaveLength(3);
+		for (const part of parts) {
+			expect(part.bytes.length).toBeLessThanOrEqual(CHUNK_SIZE_BYTES);
+			expect(Array.from(part.bytes.subarray(0, 4))).toEqual(stream.header);
+		}
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("keeps a leading ID3 tag in the first part without counting sync-like bytes in it as audio", async () => {
+		const stream = MP3_STREAMS.mpeg25At8Kbps;
+		const tag = new Uint8Array(8192);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x3f, 0x76]);
+		for (let offset = 100; offset <= 5000; offset += 100) tag.set(stream.header, offset);
+		const frames = mp3Bytes(stream, 36_000);
+		const episode = Buffer.concat([tag, frames]);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			tag.length + 18_000 * stream.frameBytes,
+			18_000 * stream.frameBytes,
+		]);
+		expect(Array.from(parts[0].bytes.subarray(0, 3))).toEqual([0x49, 0x44, 0x33]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("an MP3 that a leading tag pushes over the size limit splits into equal chunks, with no one-frame tail", async () => {
+		const stream = MP3_STREAMS.mpeg1At320Kbps;
+		// 512 bytes of tag and 43,690 frames of 960 bytes come to 41,942,912 bytes, just under
+		// twice 20 MiB, but an equal split into two puts the tag's 512 bytes over the limit.
+		const tag = new Uint8Array(512);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x03, 0x76]);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 43_690)]);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(
+			parts.map(
+				(part, index) => (part.bytes.length - (index === 0 ? 512 : 0)) / stream.frameBytes,
+			),
+		).toEqual([14_564, 14_563, 14_563]);
+		for (const part of parts) expect(part.bytes.length).toBeLessThanOrEqual(CHUNK_SIZE_BYTES);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("an MP3 whose equal split misses the size limit by its odd frame still goes in two chunks", async () => {
+		const stream = MP3_STREAMS.mpeg1At320Kbps;
+		// 512 bytes of tag and 43,689 frames: 21,845 + 21,844 puts the first chunk 192 bytes
+		// over 20 MiB, but 21,844 + 21,845 fits.
+		const tag = new Uint8Array(512);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x03, 0x76]);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 43_689)]);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(
+			parts.map(
+				(part, index) => (part.bytes.length - (index === 0 ? 512 : 0)) / stream.frameBytes,
+			),
+		).toEqual([21_844, 21_845]);
+		for (const part of parts) expect(part.bytes.length).toBeLessThanOrEqual(CHUNK_SIZE_BYTES);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("counts the last frame before a trailing tag, so the last chunk stays under maxSeconds", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// 600 s holds 25,000 frames of 24 ms, so 25,001 and an ID3v1 tag need two chunks.
+		const tag = new Uint8Array(128);
+		tag.set([0x54, 0x41, 0x47]);
+		const episode = Buffer.concat([mp3Bytes(stream, 25_001), tag]);
+
+		const parts = await chunk(episode, 600);
+
+		expect(
+			parts.map(
+				(part, index) =>
+					(part.bytes.length - (index === parts.length - 1 ? tag.length : 0)) /
+					stream.frameBytes,
+			),
+		).toEqual([12_501, 12_500]);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("audio inside a leading tag's declared size is not cut or counted", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// An ID3v2.4 tag whose 5,760,000-byte private payload is 480 s of MP3 frames, before
+		// 720 s of real audio: two requests of 360 s.
+		const payload = mp3Bytes(stream, 20_000);
+		const header = [0x49, 0x44, 0x33, 4, 0, 0];
+		for (const shift of [21, 14, 7, 0]) header.push((payload.length >> shift) & 0x7f);
+		const tag = Buffer.concat([new Uint8Array(header), payload]);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 30_000)]);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			tag.length + 15_000 * stream.frameBytes,
+			15_000 * stream.frameBytes,
+		]);
+	});
+
+	test("an MP3 that fills the time limit exactly goes whole despite frame-like bytes in its tag", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		const tag = new Uint8Array(8192);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x3f, 0x76]);
+		tag.set(stream.header, 100);
+		tag.set(stream.header, 388);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 25_000)]);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([episode.length]);
+	});
+
+	test("an MP3 that fills the time limit exactly goes whole despite frame-like bytes in a trailing tag", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// An ID3v2.4 tag with a footer after the last frame.
+		const tag = new Uint8Array(8202);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0x10, 0, 0, 0x3f, 0x76]);
+		tag.set(stream.header, 100);
+		tag.set(stream.header, 388);
+		tag.set([0x33, 0x44, 0x49, 4, 0, 0x10, 0, 0, 0x3f, 0x76], 8192);
+		const episode = Buffer.concat([mp3Bytes(stream, 25_000), tag]);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([episode.length]);
+	});
+
+	test("audio inside a second leading tag is not cut or counted either", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// An empty ID3v2.4 tag, then one whose payload is 480 s of MP3 frames, before 720 s of
+		// real audio: two requests of 360 s.
+		const tagWith = (payload: Uint8Array) => {
+			const header = [0x49, 0x44, 0x33, 4, 0, 0];
+			for (const shift of [21, 14, 7, 0]) header.push((payload.length >> shift) & 0x7f);
+			return Buffer.concat([new Uint8Array(header), payload]);
+		};
+		const tags = Buffer.concat([tagWith(new Uint8Array(0)), tagWith(mp3Bytes(stream, 20_000))]);
+		const episode = Buffer.concat([tags, mp3Bytes(stream, 30_000)]);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			tags.length + 15_000 * stream.frameBytes,
+			15_000 * stream.frameBytes,
+		]);
+	});
+
+	test("audio inside a tag after a tag with a footer is not cut or counted", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// An empty ID3v2.4 tag whose flags declare a 10-byte footer the size leaves out, then a
+		// tag whose payload is 480 s of MP3 frames, before 720 s of real audio.
+		const footed = new Uint8Array(20);
+		footed.set([0x49, 0x44, 0x33, 4, 0, 0x10, 0, 0, 0, 0]);
+		footed.set([0x33, 0x44, 0x49, 4, 0, 0x10, 0, 0, 0, 0], 10);
+		const payload = mp3Bytes(stream, 20_000);
+		const header = [0x49, 0x44, 0x33, 4, 0, 0];
+		for (const shift of [21, 14, 7, 0]) header.push((payload.length >> shift) & 0x7f);
+		const tags = Buffer.concat([footed, new Uint8Array(header), payload]);
+		const episode = Buffer.concat([tags, mp3Bytes(stream, 30_000)]);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			tags.length + 15_000 * stream.frameBytes,
+			15_000 * stream.frameBytes,
+		]);
+	});
+
+	test("tag-like bytes where no frame could start do not hide the audio after them", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// 64 bytes of junk holding "ID3" and a size of 32 MiB, before 720 s of audio.
+		const junk = new Uint8Array(64);
+		junk.set([0x49, 0x44, 0x33, 4, 0, 0, 0x10, 0, 0, 0], 20);
+		const episode = Buffer.concat([junk, mp3Bytes(stream, 30_000)]);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			junk.length + 15_000 * stream.frameBytes,
+			15_000 * stream.frameBytes,
+		]);
+	});
+
+	test("frame-like bytes in a leading tag do not set the duration of every frame", async () => {
+		const stream = MP3_STREAMS.mpeg25At8Kbps;
+		const fake = MP3_STREAMS.mpeg1At96Kbps;
+		// An ID3v2.4 tag holding two MPEG-1 headers 288 bytes apart, which pass for two 24 ms
+		// frames, before 24,001 real 72 ms frames: 1,728 s of audio.
+		const tag = new Uint8Array(8192);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x3f, 0x76]);
+		tag.set(fake.header, 100);
+		tag.set(fake.header, 388);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 24_001)]);
+
+		const parts = await chunk(episode, 600);
+
+		const seconds = parts.map(
+			(part, index) =>
+				((part.bytes.length - (index === 0 ? tag.length : 0)) / stream.frameBytes) *
+				stream.frameSeconds,
+		);
+		expect(seconds).toHaveLength(3);
+		for (const part of seconds) expect(part).toBeLessThanOrEqual(600);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("an MP3 whose bitrate rises moves the cut forward rather than adding a chunk", async () => {
+		const low = MP3_STREAMS.mpeg1At96Kbps;
+		const high = MP3_STREAMS.mpeg1At320Kbps;
+		// 21,847 low-bitrate frames, then 21,845 high-bitrate frames and an ID3v1 tag. An even
+		// cut leaves 288 + 20,971,200 + 128 bytes after it, over 20 MiB; one frame later fits.
+		const tag = new Uint8Array(128);
+		tag.set([0x54, 0x41, 0x47]);
+		const episode = Buffer.concat([mp3Bytes(low, 21_847), mp3Bytes(high, 21_845), tag]);
+
+		const parts = await chunk(episode, 1400);
+
+		expect(parts.map((part) => part.bytes.length)).toEqual([
+			21_847 * low.frameBytes,
+			21_845 * high.frameBytes + tag.length,
+		]);
+		for (const part of parts) expect(part.bytes.length).toBeLessThanOrEqual(CHUNK_SIZE_BYTES);
+		expect(joinsInto(parts, episode)).toBe(true);
+	});
+
+	test("cuts every MP3 into the fewest chunks that fit both limits", () => {
+		// A seeded generator, so a failure names a reproducible case.
+		let seed = 532;
+		const random = () => {
+			seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+			return seed / 2_147_483_648;
+		};
+		const kinds = [
+			MP3_STREAMS.mpeg1At96Kbps,
+			MP3_STREAMS.mpeg1At320Kbps,
+			MP3_STREAMS.mpeg25At8Kbps,
+		];
+		for (let trial = 0; trial < 300; trial++) {
+			const frames: (typeof kinds)[number][] = [];
+			while (frames.length < 20 + Math.floor(random() * 100)) {
+				const kind = kinds[Math.floor(random() * kinds.length)];
+				for (let run = 1 + Math.floor(random() * 12); run > 0; run--) frames.push(kind);
+			}
+			const lead = random() < 0.5 ? 512 : 0;
+			const trail = random() < 0.5 ? 128 : 0;
+			const tail = new Uint8Array(trail);
+			if (trail) tail.set([0x54, 0x41, 0x47]);
+			const bytes = new Uint8Array(
+				Buffer.concat([
+					new Uint8Array(lead),
+					...frames.map((kind) => mp3Bytes(kind, 1)),
+					tail,
+				]),
+			);
+			const maxBytes = 2_000 + Math.floor(random() * 20_000);
+			const maxSeconds = (3 + Math.floor(random() * 40)) * 0.024;
+
+			// Brute force: the fewest chunks, where a chunk is a run of frames within both limits.
+			const starts = [lead];
+			const elapsed = [0];
+			for (const kind of frames) {
+				starts.push(starts[starts.length - 1] + kind.frameBytes);
+				elapsed.push(elapsed[elapsed.length - 1] + kind.frameSeconds);
+			}
+			const startOf = (index: number) => (index === 0 ? 0 : starts[index]);
+			const endOf = (index: number) =>
+				index === frames.length ? bytes.length : starts[index];
+			const fits = (first: number, end: number) =>
+				endOf(end) - startOf(first) <= maxBytes &&
+				elapsed[end] - elapsed[first] <= maxSeconds + 1e-6;
+			const fewest: number[] = [0];
+			for (let end = 1; end <= frames.length; end++) {
+				fewest[end] = Infinity;
+				for (let first = 0; first < end; first++) {
+					if (fits(first, end)) fewest[end] = Math.min(fewest[end], fewest[first] + 1);
+				}
+			}
+			if (fewest[frames.length] === Infinity) continue;
+
+			const ends = mp3ChunkEnds(bytes, maxBytes, maxSeconds);
+			const context = `trial ${trial}`;
+			expect(ends.length, context).toBe(fewest[frames.length]);
+			ends.forEach((end, index) => {
+				const first = index === 0 ? 0 : starts.indexOf(ends[index - 1]);
+				const last = end === bytes.length ? frames.length : starts.indexOf(end);
+				expect(last, context).toBeGreaterThan(first);
+				expect(fits(first, last), context).toBe(true);
+			});
+			expect(ends[ends.length - 1], context).toBe(bytes.length);
+		}
+	});
+
+	test("an MP3 one frame short of two full chunks splits into two, with no one-frame tail", async () => {
+		const stream = MP3_STREAMS.mpeg1At96Kbps;
+		// 600 s holds 25,000 frames of 24 ms. Summing 0.024 s 25,000 times overshoots 600.
+		const episode = mp3Bytes(stream, 49_999);
+
+		const parts = await chunk(episode, 600);
+
+		expect(parts.map((part) => part.bytes.length / stream.frameBytes)).toEqual([
+			25_000, 24_999,
+		]);
+		expect(joinsInto(parts, episode)).toBe(true);
 	});
 });
 

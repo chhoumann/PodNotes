@@ -10,13 +10,14 @@ import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { openNote } from "src/ui/openNote";
 import { TimerNotice } from "src/ui/TimerNotice";
 import { createChunkFiles, getMimeType } from "./audioChunker";
-import { createTranscription, retryDelayMs } from "./openaiTranscription";
+import { canRetry, createTranscription, retryDelayMs } from "./openaiTranscription";
 import {
 	type DiarizationAudio,
 	type DiarizationProviderId,
 	type DiarizedSegment,
 	diarizeWithDeepgram,
 	diarizeWithOpenAI,
+	OPENAI_DIARIZE_PART_SECONDS,
 	renderDiarizedTranscript,
 	requiredTranscriptionKeyPresent,
 } from "./diarization";
@@ -382,11 +383,13 @@ export class TranscriptionService {
 			return segments;
 		}
 
-		// OpenAI diarization shares Whisper's ~20 MB chunk limit (a conservative
-		// margin under OpenAI's 25 MB request cap), so reuse the same chunking.
-		// Speaker labels can differ across chunks on a long episode.
+		// OpenAI diarization takes Whisper's ~20 MB chunks, capped at 600 s so each request
+		// answers inside the timeout. Speaker labels can differ across chunks.
 		updateNotice("Creating audio chunks...");
-		const chunkFiles = await createChunkFiles(audio);
+		const chunkFiles = await createChunkFiles({
+			...audio,
+			maxSeconds: OPENAI_DIARIZE_PART_SECONDS,
+		});
 		this.assertActive();
 		const segments = await diarizeWithOpenAI({
 			apiKey: this.getApiKey(),
@@ -447,9 +450,9 @@ export class TranscriptionService {
 					} catch (error) {
 						this.assertActive();
 						retries++;
-						if (retries >= MAX_RETRIES) {
+						if (retries >= MAX_RETRIES || !canRetry(error)) {
 							console.error(
-								`Failed to transcribe chunk ${index} after ${MAX_RETRIES} attempts:`,
+								`Failed to transcribe chunk ${index} after ${retries} attempt(s):`,
 								error,
 							);
 							transcriptions[index] = chunkErrorPlaceholder(index);
@@ -457,6 +460,7 @@ export class TranscriptionService {
 							lastError = error;
 							completedChunks++;
 							updateProgress();
+							break;
 						} else {
 							await this.waitForRetry(retryDelayMs(error, 1000 * retries));
 						}

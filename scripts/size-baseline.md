@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 104,000 bytes. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 104,145 bytes. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -32,6 +32,15 @@ more. The coordinator set 104,000. With both:
 ```text
 main.js raw: 318989 bytes; budget 330000 bytes; 11011 bytes remaining
 main.js gzip (level 9): 103397 bytes; budget 104000 bytes; 603 bytes remaining
+```
+
+On 2026-11-14 it rose from 104,000 for issue #532: OpenAI diarization cuts
+MP3s into the fewest balanced chunks under 20 MB and 600 s, skipping ID3v2
+tags. With it:
+
+```text
+main.js raw: 320267 bytes; budget 330000 bytes; 9733 bytes remaining
+main.js gzip (level 9): 104145 bytes; budget 104145 bytes; 0 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
