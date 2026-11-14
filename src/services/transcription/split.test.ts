@@ -185,12 +185,16 @@ describe("an MP3 over a cap", () => {
 			seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
 			return seed / 2_147_483_648;
 		};
-		const kinds = [MP3_STREAMS.mpeg1At96Kbps, MP3_STREAMS.mpeg1At320Kbps];
+		const kinds = [
+			MP3_STREAMS.mpeg1At96Kbps,
+			MP3_STREAMS.mpeg1At320Kbps,
+			MP3_STREAMS.mpeg25At8Kbps,
+		];
 		for (let trial = 0; trial < 300; trial++) {
-			const kindsUsed: (typeof kinds)[number][] = [];
-			while (kindsUsed.length < 20 + Math.floor(random() * 100)) {
-				const kind = kinds[Math.floor(random() * 2)];
-				for (let run = 1 + Math.floor(random() * 12); run > 0; run--) kindsUsed.push(kind);
+			const frames: (typeof kinds)[number][] = [];
+			while (frames.length < 20 + Math.floor(random() * 100)) {
+				const kind = kinds[Math.floor(random() * kinds.length)];
+				for (let run = 1 + Math.floor(random() * 12); run > 0; run--) frames.push(kind);
 			}
 			const lead = random() < 0.5 ? 512 : 0;
 			const tail = new Uint8Array(random() < 0.5 ? 128 : 0);
@@ -198,41 +202,74 @@ describe("an MP3 over a cap", () => {
 			const bytes = new Uint8Array(
 				Buffer.concat([
 					new Uint8Array(lead),
-					...kindsUsed.map((kind) => mp3Bytes(kind, 1)),
+					...frames.map((kind) => mp3Bytes(kind, 1)),
 					tail,
 				]),
 			);
 			const maxBytes = 2_000 + Math.floor(random() * 20_000);
-			const framesPerCap = 3 + Math.floor(random() * 40);
+			const maxSeconds = (3 + Math.floor(random() * 40)) * 0.024;
 
 			// Brute force: the fewest parts, where a part is a run of frames within both caps.
 			const offsets = [lead];
-			for (const kind of kindsUsed)
+			const elapsed = [0];
+			for (const kind of frames) {
 				offsets.push(offsets[offsets.length - 1] + kind.frameBytes);
+				elapsed.push(elapsed[elapsed.length - 1] + kind.frameSeconds);
+			}
 			const startOf = (index: number) => (index === 0 ? 0 : offsets[index]);
 			const endOf = (index: number) =>
-				index === kindsUsed.length ? bytes.length : offsets[index];
+				index === frames.length ? bytes.length : offsets[index];
+			const fits = (first: number, end: number) =>
+				endOf(end) - startOf(first) <= maxBytes &&
+				elapsed[end] - elapsed[first] <= maxSeconds + 1e-6;
 			const fewest: number[] = [0];
-			for (let end = 1; end <= kindsUsed.length; end++) {
+			for (let end = 1; end <= frames.length; end++) {
 				fewest[end] = Infinity;
-				for (let first = Math.max(0, end - framesPerCap); first < end; first++) {
-					if (endOf(end) - startOf(first) <= maxBytes) {
-						fewest[end] = Math.min(fewest[end], fewest[first] + 1);
-					}
+				for (let first = 0; first < end; first++) {
+					if (fits(first, end)) fewest[end] = Math.min(fewest[end], fewest[first] + 1);
 				}
 			}
-			if (fewest[kindsUsed.length] === Infinity) continue;
+			if (fewest[frames.length] === Infinity) continue;
 
-			const parts = await split(bytes, { maxBytes, maxSeconds: framesPerCap * 0.024 });
+			const parts = await split(bytes, { maxBytes, maxSeconds });
 
 			const context = `trial ${trial}`;
-			expect(parts.length, context).toBe(fewest[kindsUsed.length]);
+			expect(parts.length, context).toBe(fewest[frames.length]);
+			let begin = 0;
 			for (const part of parts) {
-				expect(part.bytes.length, context).toBeGreaterThan(0);
-				expect(part.bytes.length, context).toBeLessThanOrEqual(maxBytes);
+				const end = begin + part.bytes.length;
+				const first = begin === 0 ? 0 : offsets.indexOf(begin);
+				const last = end === bytes.length ? frames.length : offsets.indexOf(end);
+				expect(last, context).toBeGreaterThan(first);
+				expect(fits(first, last), context).toBe(true);
+				expect(part.start, context).toBeCloseTo(elapsed[first], 6);
+				begin = end;
 			}
 			expect(joinsInto(parts, bytes), context).toBe(true);
 		}
+	});
+
+	test("frame-like bytes in a leading tag do not set the duration of every frame", async () => {
+		const stream = MP3_STREAMS.mpeg25At8Kbps;
+		const fake = MP3_STREAMS.mpeg1At96Kbps;
+		// An ID3v2.4 tag holding two MPEG-1 headers 288 bytes apart, which pass for two 24 ms
+		// frames, before 24,001 real 72 ms frames: 1,728 s of audio.
+		const tag = new Uint8Array(8192);
+		tag.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x3f, 0x76]);
+		tag.set(fake.header, 100);
+		tag.set(fake.header, 388);
+		const episode = Buffer.concat([tag, mp3Bytes(stream, 24_001)]);
+
+		const parts = await split(episode, { maxBytes: 20 * MIB, maxSeconds: 600 });
+
+		const seconds = parts.map(
+			(part, index) =>
+				((part.bytes.length - (index === 0 ? tag.length : 0)) / stream.frameBytes) *
+				stream.frameSeconds,
+		);
+		expect(seconds).toHaveLength(3);
+		for (const part of seconds) expect(part).toBeLessThanOrEqual(600);
+		expect(joinsInto(parts, episode)).toBe(true);
 	});
 
 	test("an MP3 one frame short of two full parts splits into two, with no one-frame tail", async () => {

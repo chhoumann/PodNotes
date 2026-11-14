@@ -103,25 +103,34 @@ function mp3PartStarts(
 	maxSeconds: number,
 ): { offset: number; seconds: number }[] {
 	const count = frames.length;
-	// Frames in one stream last equally long, so parts are counted in frames: summing frame
-	// durations drifts past maxSeconds.
-	const frameSeconds = frames[0].seconds;
-	const framesPerCap = Math.floor(maxSeconds / frameSeconds + 1e-9);
+	// elapsed[i] is the length of frames [0, i). Summing durations drifts by a few ulps, so
+	// the time limit gets a microsecond of slack.
+	const elapsed = [0];
+	for (const frame of frames) elapsed.push(elapsed[elapsed.length - 1] + frame.seconds);
 	const startOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
 	const endOf = (end: number) => (end === count ? byteLength : frames[end].offset);
 	const fits = (first: number, end: number) =>
-		end - first <= framesPerCap && endOf(end) - startOf(first) <= maxBytes;
-	/** The end of the longest part that starts at `first` and fits. */
+		elapsed[end] - elapsed[first] <= maxSeconds + 1e-6 &&
+		endOf(end) - startOf(first) <= maxBytes;
+	/** The end of the longest part that starts at `first` and fits, or one frame. */
 	const furthest = (first: number) => {
-		let end = Math.min(count, first + framesPerCap);
-		while (end > first + 1 && !fits(first, end)) end--;
-		return end;
+		let [low, high] = [first + 1, count];
+		while (low < high) {
+			const middle = Math.ceil((low + high) / 2);
+			if (fits(first, middle)) low = middle;
+			else high = middle - 1;
+		}
+		return low;
 	};
-	/** The start of the longest part that ends at `end` and fits. */
+	/** The start of the longest part that ends at `end` and fits, or one frame. */
 	const earliest = (end: number) => {
-		let first = Math.max(0, end - framesPerCap);
-		while (first < end - 1 && !fits(first, end)) first++;
-		return first;
+		let [low, high] = [0, end - 1];
+		while (low < high) {
+			const middle = Math.floor((low + high) / 2);
+			if (fits(middle, end)) high = middle;
+			else low = middle + 1;
+		}
+		return low;
 	};
 	// Filling each part as far as it fits gives the fewest parts.
 	let parts = 0;
@@ -141,7 +150,7 @@ function mp3PartStarts(
 		const share = first + Math.ceil((count - first) / (parts - index + 1));
 		firsts.push(Math.min(Math.max(share, lowest[index]), furthest(first)));
 	}
-	return firsts.map((first) => ({ offset: startOf(first), seconds: first * frameSeconds }));
+	return firsts.map((first) => ({ offset: startOf(first), seconds: elapsed[first] }));
 }
 
 /**
