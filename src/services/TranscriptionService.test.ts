@@ -2072,6 +2072,32 @@ describe("TranscriptionService", () => {
 			expect(savedNote(plugin)).toBe(timedNote);
 		});
 
+		test("joins a Whisper word list, whose words carry their own leading space, back into its words", async () => {
+			// Measured live: whisper-large-v3-turbo lists "sci-fi" as " sci" and "-fi".
+			providerMock.mockImplementation(async () =>
+				Response.json({
+					text: " only see sci-fi as cultural criticism. Hi!",
+					words: [
+						{ word: " only", start: 1.2, end: 1.4 },
+						{ word: " see", start: 1.4, end: 1.6 },
+						{ word: " sci", start: 1.6, end: 1.8 },
+						{ word: "-fi", start: 1.8, end: 2 },
+						{ word: " as", start: 2, end: 2.1 },
+						{ word: " cultural", start: 2.1, end: 2.5 },
+						{ word: " criticism.", start: 2.5, end: 3 },
+						{ word: " Hi!", start: 10.16, end: 10.5 },
+					],
+				}),
+			);
+			const plugin = useServer();
+
+			await expect(finalNotice(plugin)).resolves.toBe("Transcription completed and saved.");
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) only see sci-fi as cultural criticism.\n\n` +
+					`[00:00:10](${link("10.16")}) Hi!`,
+			);
+		});
+
 		test("with no key selected, runs and sends no Authorization header", async () => {
 			providerMock.mockImplementation(async () => Response.json(verbose));
 			const plugin = useServer();

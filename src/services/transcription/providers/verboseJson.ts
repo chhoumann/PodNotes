@@ -8,9 +8,27 @@ import type { PartTranscript, Segment, Word } from "./types";
 export function verboseJsonTimes(answer: unknown): PartTranscript | undefined {
 	if (!isPlainObject(answer)) return undefined;
 	const words = Array.isArray(answer.words) ? answer.words.flatMap(wordOf) : [];
-	if (words.length > 0) return { words: punctuated(words, answer.text) };
+	if (words.length > 0) return { words: punctuated(joined(words), answer.text) };
 	const segments = Array.isArray(answer.segments) ? answer.segments.flatMap(segmentOf) : [];
 	return segments.length > 0 ? { segments } : undefined;
+}
+
+/**
+ * Whisper lists each word with its leading space, and a piece without one continues the word
+ * before it, as " sci" and "-fi" in "sci-fi". Lists of bare words are left as they are.
+ */
+function joined(words: Word[]): Word[] {
+	if (!words.some((word) => /^\s/.test(word.text))) return words;
+	const out: Word[] = [];
+	for (const word of words) {
+		const last = out[out.length - 1];
+		if (last && !/^\s/.test(word.text)) {
+			out[out.length - 1] = { ...last, text: last.text + word.text, end: word.end };
+		} else {
+			out.push(word);
+		}
+	}
+	return out.map((word) => ({ ...word, text: word.text.trim() }));
 }
 
 function wordOf(item: unknown): Word[] {
