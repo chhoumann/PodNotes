@@ -166,9 +166,10 @@ function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: number): 
 	// Frames in one stream last equally long, so chunks are counted in frames: summing
 	// frame durations drifts past maxSeconds.
 	const framesPerCap = Math.floor(maxSeconds / frames[0].seconds + 1e-9);
-	// The fewest chunks of equal frame counts that fit both limits. A leading tag or a
-	// variable bitrate can put an equal split over maxBytes, and then one more chunk is
-	// tried, so no chunk is ever cut short and no one-frame tail is left.
+	const offsetOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
+	// The fewest chunks that fit both limits, each taking an equal share of the frames
+	// still to place and stepping back a frame at a time while it is over maxBytes, so
+	// chunks differ by a frame or so and none is a one-frame tail.
 	for (
 		let chunks = Math.max(
 			Math.ceil(bytes.length / maxBytes),
@@ -177,19 +178,27 @@ function mp3ChunkEnds(bytes: Uint8Array, maxBytes: number, maxSeconds: number): 
 		;
 		chunks++
 	) {
-		const ends = Array.from({ length: chunks }, (_, index) =>
-			index === chunks - 1
-				? bytes.length
-				: frames[Math.ceil(((index + 1) * frames.length) / chunks)].offset,
-		);
-		const fits = ends.every((end, index) => end - (ends[index - 1] ?? 0) <= maxBytes);
-		if (fits || chunks >= frames.length) return ends;
+		const firsts = [0];
+		for (let left = chunks - 1; left > 0; left--) {
+			const first = firsts[firsts.length - 1];
+			const share = Math.ceil((frames.length - first) / (left + 1));
+			let next = Math.min(first + Math.min(share, framesPerCap), frames.length - left);
+			while (next > first + 1 && frames[next].offset - offsetOf(first) > maxBytes) next--;
+			firsts.push(next);
+		}
+		const last = firsts[firsts.length - 1];
+		const lastFits =
+			frames.length - last <= framesPerCap && bytes.length - offsetOf(last) <= maxBytes;
+		if (lastFits || chunks >= frames.length) {
+			return [...firsts.slice(1).map((first) => frames[first].offset), bytes.length];
+		}
 	}
 }
 
 /**
- * The Layer III frames in `bytes`. A frame counts only when another frame or the
- * end of the buffer follows it, so sync-like bytes in a tag or cover art don't.
+ * The Layer III frames in `bytes`. A frame counts when it continues the frames before it,
+ * or when another frame or the end of the buffer follows it, so sync-like bytes in a tag
+ * or cover art don't, and the last frame before trailing metadata does.
  */
 function mp3Frames(bytes: Uint8Array): Mp3Frame[] {
 	const frames: Mp3Frame[] = [];
@@ -197,7 +206,9 @@ function mp3Frames(bytes: Uint8Array): Mp3Frame[] {
 	while (offset + 4 <= bytes.length) {
 		const frame = mp3FrameAt(bytes, offset);
 		const next = frame ? offset + frame.length : 0;
-		if (frame && (next === bytes.length || mp3FrameAt(bytes, next))) {
+		const last = frames[frames.length - 1];
+		const continues = last !== undefined && last.offset + last.length === offset;
+		if (frame && (continues || next === bytes.length || mp3FrameAt(bytes, next))) {
 			frames.push(frame);
 			offset = next;
 		} else {
