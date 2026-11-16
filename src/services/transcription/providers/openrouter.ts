@@ -227,10 +227,11 @@ function parse(answer: unknown): PartTranscript {
 const RESYNC_TOKENS = 200;
 
 /**
- * A word without marks: letters and digits, with apostrophes, hyphens, or a number's `.,:/`
- * between them, and a currency sign before or `%` after, as "it's", "3.5", "$5" or "5%".
+ * A word without marks: letters and digits with apostrophes or hyphens between them, as
+ * "it's", or a number with `.,:/` between its digits, a currency sign before or `%` after,
+ * as "3.5", "$5" or "5%".
  */
-const PLAIN_WORD = /^[$€£¥]?[\p{L}\p{N}]+(?:['’.,:/-][\p{L}\p{N}]+)*%?$/u;
+const PLAIN_WORD = /^(?:[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*|[$€£¥]?\p{N}+(?:[.,:/]\p{N}+)*%?)$/u;
 /** Opening quotes and brackets a word takes from the start of its token. */
 const LEADING = /^['“"‘([¿¡「『《【（]+/u;
 /** Closing punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */

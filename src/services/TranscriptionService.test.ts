@@ -1844,6 +1844,12 @@ describe("TranscriptionService", () => {
 					"Hello world.🙂 Next",
 				],
 				[
+					"keeps every Qwen word as given when one has a comma or colon between letters",
+					"Hello, world again! Helloworld, next. Time: now.",
+					"Hello world,again Hello,world next Time:now",
+					"Hello world,again Hello,world next Time:now",
+				],
+				[
 					"restores punctuation after Qwen's numbers, amounts, times and percentages",
 					"It rose 3.5, then $5 at 3:30. Then 5%. Of 1,000! Then -3.",
 					"It rose 3.5 then $5 at 3:30 Then 5% Of 1,000 Then 3",
