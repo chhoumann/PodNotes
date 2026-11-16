@@ -54,8 +54,11 @@ function wordOf(item: unknown): Word[] {
 /** Tokens a word that matches no nearby token may be found again in, where the next words follow. */
 const RESYNC_TOKENS = 200;
 
-/** Letters and digits, with apostrophes and hyphens between them: a word that gains marks. */
-const PLAIN_WORD = /^[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*$/u;
+/**
+ * A word that gains marks: letters and digits, with apostrophes, hyphens, or a number's
+ * `.,:/` between them, and a currency sign before or `%` after, as "3.5", "$5" or "5%".
+ */
+const PLAIN_WORD = /^[$€£¥]?[\p{L}\p{N}]+(?:['’.,:/-][\p{L}\p{N}]+)*%?$/u;
 /** Opening quotes and brackets a word takes from the start of its token. */
 const LEADING = /^[“"‘'([¿¡「『《【（]+/u;
 /** Punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
