@@ -55,9 +55,16 @@ function wordOf(item: unknown): Word[] {
 const RESYNC_TOKENS = 200;
 
 /** Opening quotes and brackets a word takes from the start of its token. */
-const LEADING = /^[“"‘'([¿¡]+/u;
-/** Punctuation a word takes from the end of its token. */
-const TRAILING = /[.,?!;:…”"’')\]]+$/u;
+const LEADING = /^[“"‘'([¿¡「『《【（]+/u;
+/** Punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
+const TRAILING = /[.,?!;:…—–”"’')\]。，、？！；：」』》】）]+$/u;
+
+/**
+ * A word from a model that punctuates its words itself: one with a mark after its last letter
+ * or digit, as "world." or "world.🙂", or a mark listed as a word of its own.
+ */
+const punctuatedAlready = ({ text }: Word): boolean =>
+	/[.,?!;:][^\p{L}\p{N}]*$/u.test(text) || !/[\p{L}\p{N}]/u.test(text);
 
 /**
  * Qwen3 ASR, and the servers that run it or Whisper, can list words without punctuation and
@@ -67,11 +74,15 @@ const TRAILING = /[.,?!;:…”"’')\]]+$/u;
  * and the one that ends it, its closing punctuation.
  */
 function punctuated(words: Word[], text: unknown): Word[] {
-	// Words that end in punctuation come from a model that punctuates them itself.
-	if (typeof text !== "string" || words.some((word) => /[.,?!]$/.test(word.text))) return words;
+	if (typeof text !== "string" || words.some(punctuatedAlready)) return words;
 	const tokens = text.split(/\s+/).filter(Boolean);
-	// Letters and digits only, so a quote mark matches nothing, as in "'Hello" for "Hello".
-	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+	// Apostrophes count inside a word, so "we'll" is not "well", and not at its ends, where
+	// they quote it, as in "'Hello".
+	const bare = (token: string) =>
+		token
+			.toLowerCase()
+			.replace(/[^\p{L}\p{N}']/gu, "")
+			.replace(/^'+|'+$/g, "");
 	const keys = tokens.map(bare);
 	const wordKeys = words.map((word) => bare(word.text));
 	/** Where word `w` ends when it starts at offset `o` of token `t`. */

@@ -1803,6 +1803,36 @@ describe("TranscriptionService", () => {
 					'"Hello world." (Next)',
 				],
 				[
+					"gives Qwen's words Chinese punctuation and dashes from its text",
+					"你好。 我们走吧！ Wait— really",
+					"你好 我们走吧 Wait really",
+					"你好。 我们走吧！ Wait— really",
+				],
+				[
+					"does not give a Qwen contraction the punctuation of a word spelled like it without the apostrophe",
+					"Well, we'll see. Okay.",
+					"we'll see Okay",
+					"we'll see. Okay.",
+				],
+				[
+					"adds nothing to Qwen's words when it lists quotes as entries of their own",
+					'"Hello world." Next!',
+					'" Hello world " Next',
+					'" Hello world " Next',
+				],
+				[
+					"adds nothing to Qwen's words when it lists a semicolon as an entry of its own",
+					"Hello world; Next!",
+					"Hello world ; Next",
+					"Hello world ; Next",
+				],
+				[
+					"adds nothing to Qwen's words when one already has punctuation before an emoji",
+					"Hello world. Next!",
+					"Hello world.🙂 Next",
+					"Hello world.🙂 Next",
+				],
+				[
 					"restores punctuation to Qwen's words when one of them holds a decimal point",
 					"It rose 3.5 percent, then fell. Odd!",
 					"It rose 3.5 percent then fell Odd",
