@@ -1797,6 +1797,12 @@ describe("TranscriptionService", () => {
 					"'Hello world.' It's done. Next.",
 				],
 				[
+					"adds no second quote or period to Qwen's words that already have them",
+					'"Hello world." (Next)',
+					'"Hello world." (Next)',
+					'"Hello world." (Next)',
+				],
+				[
 					"restores punctuation to Qwen's words when one of them holds a decimal point",
 					"It rose 3.5 percent, then fell. Odd!",
 					"It rose 3.5 percent then fell Odd",
