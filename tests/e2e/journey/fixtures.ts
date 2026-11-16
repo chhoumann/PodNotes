@@ -606,6 +606,8 @@ export type OpenRouterRequest = Readonly<{
 	contentType: string | null;
 	model: string | null;
 	diarize: boolean;
+	/** The `timestamp_granularities` the request asked for. */
+	granularities: string[];
 	/** The address the request named in place of the audio. */
 	url: string | null;
 	audioBytes: number;
@@ -619,7 +621,8 @@ const OPENROUTER_CATALOG_URL =
 
 /**
  * Answers OpenRouter's transcriptions with `first` from one speaker at 0 s and `second` from
- * another 12 s in, and its catalog with the three models PodNotes offers.
+ * another 12 s in, and its catalog with the five models PodNotes offers. Qwen3 ASR answers
+ * words without speakers, and Voxtral segments, or a 400 when asked for word times, as they do.
  */
 export async function installOpenRouterStub(
 	obsidian: ObsidianClient,
@@ -636,22 +639,38 @@ export async function installOpenRouterStub(
 			const start = from + index * 0.4;
 			return { word, start, end: start + 0.3, speaker, speaker_label: "speaker_" + speaker, confidence: 0.99 };
 		});
-		const words = [...spoken(${jsLiteral(first)}, 0, 0), ...spoken(${jsLiteral(second)}, 1, 12)];
-		const reply = (replyChannel, answer) => {
+		const opening = spoken(${jsLiteral(first)}, 0, 0);
+		const answering = spoken(${jsLiteral(second)}, 1, 12);
+		const words = [...opening, ...answering];
+		const text = ${jsLiteral(`${first} ${second}`)};
+		const segments = [
+			{ id: 0, start: 0, end: opening.at(-1).end, text: " " + ${jsLiteral(first)} },
+			{ id: 1, start: 12, end: answering.at(-1).end, text: " " + ${jsLiteral(second)} },
+		];
+		const answers = {
+			"mistralai/voxtral-mini-transcribe-3-0": (granularities) =>
+				granularities.length > 0
+					? [400, { error: { message: "Provider returned 400", code: 400 } }]
+					: [200, { text, segments }],
+			"qwen/qwen3-asr-1.7b": () => [200, { text, words: words.map(({ word, start, end }) => ({ word, start, end })) }],
+		};
+		const reply = (replyChannel, answer, status = 200) => {
 			const body = new TextEncoder().encode(JSON.stringify(answer)).buffer;
-			ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body });
+			ipc.emit(replyChannel, {}, { status, headers: { "content-type": "application/json" }, body });
 		};
 		const answer = async (replyChannel, request) => {
 			const headers = new Headers(request.headers);
 			const contentType = request.contentType ?? null;
 			let model = null;
 			let diarize = false;
+			let granularities = [];
 			let url = null;
 			let bytes = null;
 			if (contentType === "application/json") {
 				const body = JSON.parse(new TextDecoder().decode(request.body));
 				model = body.model;
 				diarize = body.diarize === true || body.provider?.options?.xai?.diarize === true;
+				granularities = body.timestamp_granularities ?? [];
 				url = body.input_audio?.url ?? null;
 				if (body.input_audio?.data) bytes = Uint8Array.from(atob(body.input_audio.data), (char) => char.charCodeAt(0));
 			} else {
@@ -659,6 +678,7 @@ export async function installOpenRouterStub(
 				const file = form.get("file");
 				model = form.get("model");
 				diarize = form.get("diarize") === "true";
+				granularities = form.getAll("timestamp_granularities[]");
 				if (file instanceof Blob) bytes = new Uint8Array(await file.arrayBuffer());
 			}
 			requests.push({
@@ -667,11 +687,13 @@ export async function installOpenRouterStub(
 				contentType,
 				model,
 				diarize,
+				granularities,
 				url,
 				audioBytes: bytes?.byteLength ?? 0,
 				sha256: bytes && require("node:crypto").createHash("sha256").update(bytes).digest("hex"),
 			});
-			reply(replyChannel, { text: ${jsLiteral(`${first} ${second}`)}, words });
+			const [status, answer] = answers[model]?.(granularities) ?? [200, { text, words }];
+			reply(replyChannel, answer, status);
 		};
 		ipc.send = function (channel, replyChannel, request, ...rest) {
 			if (channel === "request-url" && request?.url === ${jsLiteral(OPENROUTER_TRANSCRIPTIONS_URL)}) {
@@ -680,7 +702,7 @@ export async function installOpenRouterStub(
 			}
 			if (channel === "request-url" && request?.url === ${jsLiteral(OPENROUTER_CATALOG_URL)}) {
 				catalogReads.push(new Headers(request.headers).get("authorization"));
-				queueMicrotask(() => reply(replyChannel, { data: ["x-ai/grok-stt-2.0", "elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"].map((id) => ({ id, expiration_date: null })) }));
+				queueMicrotask(() => reply(replyChannel, { data: ["x-ai/grok-stt-2.0", "elevenlabs/scribe-v2", "microsoft/mai-transcribe-2", "mistralai/voxtral-mini-transcribe-3-0", "qwen/qwen3-asr-1.7b"].map((id) => ({ id, expiration_date: null })) }));
 				return;
 			}
 			return originalSend.call(ipc, channel, replyChannel, request, ...rest);

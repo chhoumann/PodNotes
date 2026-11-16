@@ -537,7 +537,7 @@ describe("TranscriptionService", () => {
 				await vi.advanceTimersByTimeAsync(60 * 60_000);
 
 				expect(String(setMessage.mock.calls.at(-1)?.[0])).toMatch(
-					/\n\nSaved without speaker labels, because OpenAI does not label speakers\. These providers do: ElevenLabs, Deepgram, OpenRouter\.$/,
+					/\n\nSaved without speaker labels, because GPT Transcribe does not label speakers\. These providers do: ElevenLabs, Deepgram, OpenRouter\.$/,
 				);
 				expect(hide).not.toHaveBeenCalled();
 				expect(savedNote(plugin)).toBe("# Test Episode\n\nHello there. Hi!");
@@ -1365,6 +1365,8 @@ describe("TranscriptionService", () => {
 			"x-ai/grok-stt-1.0": "2026-11-15",
 			"elevenlabs/scribe-v2": null,
 			"microsoft/mai-transcribe-2": null,
+			"mistralai/voxtral-mini-transcribe-3-0": null,
+			"qwen/qwen3-asr-1.7b": null,
 		});
 		/** Answers the catalog with `listed`, and each transcription request with `answer`. */
 		const openRouter = (
@@ -1603,6 +1605,339 @@ describe("TranscriptionService", () => {
 			const times = [...note.matchAll(/time=([\d.]+)\)/g)].map(([, time]) => time);
 			expect(times).toEqual(expected.map(String));
 			expect(note).toContain(`Part ${partBytes.length}.`);
+		});
+
+		describe("models without speaker labels", () => {
+			const VOXTRAL = "mistralai/voxtral-mini-transcribe-3-0";
+			const QWEN = "qwen/qwen3-asr-1.7b";
+			/** Voxtral's verbose_json: timed segments and no words. */
+			const segmentsAnswer = {
+				text: "Hello there. Hi!",
+				duration: 11,
+				segments: [
+					{ id: 0, start: 1.2, end: 1.9, text: " Hello there." },
+					{ id: 1, start: 10.16, end: 10.5, text: " Hi!" },
+				],
+			};
+			const wordsAnswer = {
+				...answers,
+				words: answers.words.map(({ speaker: _s, speaker_label: _l, ...rest }) => rest),
+			};
+
+			test.each([
+				[
+					VOXTRAL,
+					"Voxtral Mini Transcribe 3",
+					segmentsAnswer,
+					{ model: VOXTRAL, response_format: "verbose_json" },
+				],
+				[
+					QWEN,
+					"Qwen3 ASR 1.7B",
+					wordsAnswer,
+					{
+						model: QWEN,
+						response_format: "verbose_json",
+						"timestamp_granularities[]": "word",
+					},
+				],
+			])(
+				"%s gets the upload as its measured multipart request, and with speaker labels on the note is timed, unlabeled, and the notice says why",
+				async (model, label, answer, expected) => {
+					openRouter(() => Response.json(answer));
+					const plugin = useOpenRouter({
+						model,
+						feeds: savedFeedRepository(publicFeed, [mockEpisode]),
+					});
+
+					await expect(finalNotice(plugin)).resolves.toBe(
+						`Saved without speaker labels, because ${label} does not label speakers. These providers do: ElevenLabs, Deepgram, OpenRouter.`,
+					);
+
+					expect(sent()).toHaveLength(1);
+					const [request] = sent();
+					expect(request.headers).toEqual({ Authorization: "Bearer openrouter-key" });
+					expect(await fields(request)).toEqual(expected);
+					expect(new Uint8Array(await (await sentFile(request)).arrayBuffer())).toEqual(
+						audio,
+					);
+					expect(savedNote(plugin)).toBe(unlabeled);
+				},
+			);
+
+			test("Qwen's words, which it lists without punctuation, take their punctuation from its text", async () => {
+				// Measured live: Qwen3 ASR keeps punctuation only in `text`.
+				openRouter(() =>
+					Response.json({
+						text: "Hello there. Uh, it's re-running now. Hi!",
+						duration: 11,
+						words: [
+							{ word: "Hello", start: 1.2, end: 1.5 },
+							{ word: "there", start: 1.5, end: 1.9 },
+							{ word: "Uh", start: 2, end: 2.2 },
+							{ word: "it's", start: 2.2, end: 2.5 },
+							{ word: "re", start: 2.5, end: 2.7 },
+							{ word: "running", start: 2.7, end: 3 },
+							{ word: "now", start: 3, end: 3.3 },
+							{ word: "Hi", start: 10.16, end: 10.5 },
+						],
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there. Uh, it's re running now.\n\n[00:00:10](${link("10.16")}) Hi!`,
+				);
+			});
+
+			test("Qwen's words keep taking punctuation from its text after a long stretch the words leave out", async () => {
+				const said = "so we kept re running it Then it was running".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Um, uh, you know, like, I mean, honestly, okay, right, well, look, so we kept re-running it. Then it was running. Hi!",
+						words: [
+							...said.map((word, index) => ({
+								word,
+								start: 1.2 + index / 5,
+								end: 1.4 + index / 5,
+							})),
+							{ word: "Hi", start: 10.16, end: 10.5 },
+						],
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1.2")}) so we kept re running it. Then it was running.\n\n` +
+						`[00:00:10](${link("10.16")}) Hi!`,
+				);
+			});
+
+			test("Qwen's words split from one token of its text take its punctuation in place, not from where the pair comes again", async () => {
+				const said = "Short term challenges remain Later short term we adapt".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Short-term challenges remain. Later, short term, we adapt.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) Short term challenges remain. Later, short term, we adapt.`,
+				);
+			});
+
+			test("the last of the Qwen words split from one token of its text takes that token's punctuation", async () => {
+				const said = "It was short term Then we left".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "It was short-term. Then we left.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) It was short term. Then we left.`,
+				);
+			});
+
+			test("a Qwen word its text says differently is not matched to a later token the next words do not follow", async () => {
+				// The words say "And" where the text says "So", and "And" comes later, before "so".
+				const said = "Right And the answer is yes And so the answer is no".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Right. So the answer is yes. And so, the answer is no.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) Right. And the answer is yes. And so, the answer is no.`,
+				);
+			});
+
+			test.each([
+				[
+					"keeps every Qwen word as given when one has a symbol, an emoji, a quote or an end apostrophe",
+					"Use C for systems. Hello, 1️⃣world! Say 'Hello world' about dogs. Done.",
+					"Use C++ for systems Hello 1️⃣,world Say' Hello world about dogs’ Done",
+					"Use C++ for systems Hello 1️⃣,world Say' Hello world about dogs’ Done",
+				],
+				[
+					"restores single quotes around Qwen's words",
+					"'Hello world.' It's done. Next.",
+					"Hello world It's done Next",
+					"'Hello world.' It's done. Next.",
+				],
+				[
+					"adds no second quote or period to Qwen's words that already have them",
+					'"Hello world." (Next)',
+					'"Hello world." (Next)',
+					'"Hello world." (Next)',
+				],
+				[
+					"gives Qwen's words Chinese punctuation and dashes from its text",
+					"你好。我们走吧！「好」 Wait— really",
+					"你好 我们走吧 好 Wait really",
+					"你好。 我们走吧！ 「好」 Wait— really",
+				],
+				[
+					"keeps a run of Chinese marks together on one Qwen word",
+					"「你好。」我们走吧！！",
+					"你好 我们走吧",
+					"「你好。」 我们走吧！！",
+				],
+				[
+					"restores punctuation to Qwen's words with combining marks, as in Hindi",
+					"Un cafe\u0301, merci. नमस्ते दुनिया। फिर मिलेंगे?",
+					"Un cafe\u0301 merci नमस्ते दुनिया फिर मिलेंगे",
+					"Un cafe\u0301, merci. नमस्ते दुनिया। फिर मिलेंगे?",
+				],
+				[
+					"does not give a Qwen contraction the punctuation of a word spelled like it without the apostrophe",
+					"Well, we'll see. Okay.",
+					"we'll see Okay",
+					"we'll see. Okay.",
+				],
+				[
+					"adds nothing to Qwen's words when it lists quotes as entries of their own",
+					'"Hello world." Next!',
+					'" Hello world " Next',
+					'" Hello world " Next',
+				],
+				[
+					"adds nothing to Qwen's words when one starts with a mark the word before could take",
+					'Hello, world! Hi… Next. 你好。再见 Say "yes" now',
+					'Hello ,world Hi …Next 你好 。再见 Say" yes now',
+					'Hello ,world Hi …Next 你好 。再见 Say" yes now',
+				],
+				[
+					"adds nothing to Qwen's words when it lists a semicolon as an entry of its own",
+					"Hello world; Next!",
+					"Hello world ; Next",
+					"Hello world ; Next",
+				],
+				[
+					"adds nothing to Qwen's words when one already has punctuation before an emoji",
+					"Hello world. Next!",
+					"Hello world.🙂 Next",
+					"Hello world.🙂 Next",
+				],
+				[
+					"keeps every Qwen word as given when one has a comma or colon between letters",
+					"Hello, world again! Helloworld, next. Time: now.",
+					"Hello world,again Hello,world next Time:now",
+					"Hello world,again Hello,world next Time:now",
+				],
+				[
+					"restores punctuation after Qwen's numbers, amounts, times and percentages",
+					"It rose 3.5, then $5 at 3:30. Then 5%. Of 1,000! Then -3.",
+					"It rose 3.5 then $5 at 3:30 Then 5% Of 1,000 Then 3",
+					// The note escapes "$" and "%", which start math and comments in Obsidian.
+					"It rose 3.5, then \\$5 at 3:30. Then 5\\%. Of 1,000! Then 3.",
+				],
+				[
+					"restores punctuation to Qwen's words when one of them holds a decimal point",
+					"It rose 3.5 percent, then fell. Odd!",
+					"It rose 3.5 percent then fell Odd",
+					"It rose 3.5 percent, then fell. Odd!",
+				],
+			])("%s", async (_, text, said, note) => {
+				openRouter(() =>
+					Response.json({
+						text,
+						words: said.split(" ").map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) ${note}`,
+				);
+			});
+
+			test("Voxtral's segments from two parts of at most 900 s become paragraphs timed from the episode's start", async () => {
+				const stream = MP3_STREAMS.mpeg25At8Kbps;
+				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
+				getEpisodeAudioBufferMock.mockResolvedValue({
+					buffer: mp3Bytes(stream, Math.ceil(1500 / stream.frameSeconds)).buffer,
+					extension: "mp3",
+				});
+				const partBytes: number[] = [];
+				openRouter(async (request) => {
+					partBytes.push((await sentFile(request)).size);
+					const part = partBytes.length;
+					return Response.json({
+						text: `Part ${part} opens. Part ${part} ends.`,
+						segments: [
+							{ id: 0, start: 2.5, end: 6, text: ` Part ${part} opens.` },
+							{ id: 1, start: 40, end: 43.25, text: ` Part ${part} ends.` },
+						],
+					});
+				});
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(partBytes).toHaveLength(2);
+				for (const bytes of partBytes) {
+					expect(mp3Seconds(stream, bytes)).toBeLessThanOrEqual(900);
+				}
+				const second = mp3Seconds(stream, partBytes[0]);
+				const note = savedNote(plugin);
+				expect(
+					[...note.matchAll(/time=([\d.]+)\) (.+)$/gm)].map(([, t, s]) => [t, s]),
+				).toEqual([
+					["2.5", "Part 1 opens."],
+					["40", "Part 1 ends."],
+					[`${Math.round((second + 2.5) * 1000) / 1000}`, "Part 2 opens."],
+					[`${Math.round((second + 40) * 1000) / 1000}`, "Part 2 ends."],
+				]);
+			});
+
+			test("an answer with neither words nor segments writes no note", async () => {
+				openRouter(() => Response.json({ text: "Hello there.", duration: 11 }));
+				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
+
+				await expect(finalNotice(plugin)).resolves.toBe(
+					"Transcription failed: OpenRouter found no speech in this episode.",
+				);
+
+				expect(plugin.app.vault.create).not.toHaveBeenCalled();
+			});
 		});
 
 		describe("speaker labels across the parts of an episode", () => {

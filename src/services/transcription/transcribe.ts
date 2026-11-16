@@ -133,7 +133,7 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	}
 	if (choice.speakers && !model.speakers) {
 		warnings.push(
-			`Saved without speaker labels, because ${choice.label} does not label speakers. These providers do: ${providersWithSpeakers().join(", ")}.`,
+			`Saved without speaker labels, because ${model.label} does not label speakers. These providers do: ${providersWithSpeakers().join(", ")}.`,
 		);
 	}
 	const labels = new Set(
