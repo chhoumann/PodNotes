@@ -55,27 +55,14 @@ function wordOf(item: unknown): Word[] {
 const RESYNC_TOKENS = 200;
 
 /**
- * A word that gains marks: letters and digits, with apostrophes, hyphens, or a number's
- * `.,:/` between them, and a currency sign before or `%` after, as "3.5", "$5" or "5%".
+ * A word without marks: letters and digits, with apostrophes, hyphens, or a number's `.,:/`
+ * between them, and a currency sign before or `%` after, as "it's", "3.5", "$5" or "5%".
  */
 const PLAIN_WORD = /^[$€£¥]?[\p{L}\p{N}]+(?:['’.,:/-][\p{L}\p{N}]+)*%?$/u;
-/** Opening quotes and brackets, and the closing punctuation, a word takes from its token. */
-const OPENING = '“"‘([¿¡「『《【（';
-const CLOSING = '.,?!;:…—–”"’)\\]。，、？！；：」』》】）';
-const LEADING = new RegExp(`^['${OPENING}]+`, "u");
-/** None of `%` or `#`, which are words' own. */
-const TRAILING = new RegExp(`['${CLOSING}]+$`, "u");
-/** A mark before a word's first letter or digit or after its last. Apostrophes, as in "dogs'", do not count. */
-const MARKS = `${OPENING}${CLOSING}`.replace(/[‘’]/g, "");
-const EDGE_MARK = new RegExp(`^[^\\p{L}\\p{N}]*[${MARKS}]|[${MARKS}][^\\p{L}\\p{N}]*$`, "u");
-
-/**
- * A word from a model that punctuates its words itself: one with a mark before its first
- * letter or digit or after its last, as ",world", "world." or "world.🙂", or a mark listed
- * as a word of its own.
- */
-const punctuatedAlready = ({ text }: Word): boolean =>
-	EDGE_MARK.test(text) || !/[\p{L}\p{N}]/u.test(text);
+/** Opening quotes and brackets a word takes from the start of its token. */
+const LEADING = /^['“"‘([¿¡「『《【（]+/u;
+/** Closing punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
+const TRAILING = /['.,?!;:…—–”"’)\]。，、？！；：」』》】）]+$/u;
 
 /**
  * Qwen3 ASR, and the servers that run it or Whisper, can list words without punctuation and
@@ -85,7 +72,11 @@ const punctuatedAlready = ({ text }: Word): boolean =>
  * and the one that ends it, its closing punctuation.
  */
 function punctuated(words: Word[], text: unknown): Word[] {
-	if (typeof text !== "string" || words.some(punctuatedAlready)) return words;
+	// Marks come from the text only when no word has any, so none can be added twice. A model
+	// that marks any word punctuates its own words, and they are kept as given.
+	if (typeof text !== "string" || !words.every((word) => PLAIN_WORD.test(word.text))) {
+		return words;
+	}
 	// Chinese and Japanese put no space between sentences, so their marks end a token too.
 	const tokens = text
 		.replace(/[。，、？！；：」』》】）]+/gu, "$& ")
@@ -134,11 +125,8 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		if (!start || !at) return word;
 		[t, o] = at;
 		const token = tokens[start[0]];
-		// Only a plain word gains marks, so one with a mark, a symbol or an emoji anywhere keeps
-		// its text as given and gains no second mark.
-		const plain = PLAIN_WORD.test(word.text);
-		const lead = plain && start[1] === 0 ? (LEADING.exec(token)?.[0] ?? "") : "";
-		const trail = plain && o === 0 ? (TRAILING.exec(token)?.[0] ?? "") : "";
+		const lead = start[1] === 0 ? (LEADING.exec(token)?.[0] ?? "") : "";
+		const trail = o === 0 ? (TRAILING.exec(token)?.[0] ?? "") : "";
 		return { ...word, text: lead + word.text + trail };
 	});
 }

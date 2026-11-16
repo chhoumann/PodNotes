@@ -1784,11 +1784,10 @@ describe("TranscriptionService", () => {
 
 			test.each([
 				[
-					"keeps Qwen's words as they are, with symbols its text leaves out or adds",
-					"Use C for systems. It is 5 degrees, 5 more today. Then -3.",
-					"Use C++ for systems It is -5 degrees 5% more today Then 3",
-					// The note escapes "%", which starts a comment in Obsidian.
-					"Use C++ for systems. It is -5 degrees, 5\\% more today. Then 3.",
+					"keeps every Qwen word as given when one has a symbol, an emoji, a quote or an end apostrophe",
+					"Use C for systems. Hello, 1️⃣world! Say 'Hello world' about dogs. Done.",
+					"Use C++ for systems Hello 1️⃣,world Say' Hello world about dogs’ Done",
+					"Use C++ for systems Hello 1️⃣,world Say' Hello world about dogs’ Done",
 				],
 				[
 					"restores single quotes around Qwen's words",
@@ -1839,12 +1838,6 @@ describe("TranscriptionService", () => {
 					"Hello world ; Next",
 				],
 				[
-					"adds no second mark to a Qwen word that has one beside an emoji",
-					'"1️⃣Go now" "ℹ️Info here."',
-					'1️⃣"Go now ℹ️"Info here',
-					'1️⃣"Go now" ℹ️"Info here."',
-				],
-				[
 					"adds nothing to Qwen's words when one already has punctuation before an emoji",
 					"Hello world. Next!",
 					"Hello world.🙂 Next",
@@ -1852,16 +1845,10 @@ describe("TranscriptionService", () => {
 				],
 				[
 					"restores punctuation after Qwen's numbers, amounts, times and percentages",
-					"It rose 3.5, then $5 at 3:30. Then 5%. Of 1,000!",
-					"It rose 3.5 then $5 at 3:30 Then 5% Of 1,000",
+					"It rose 3.5, then $5 at 3:30. Then 5%. Of 1,000! Then -3.",
+					"It rose 3.5 then $5 at 3:30 Then 5% Of 1,000 Then 3",
 					// The note escapes "$" and "%", which start math and comments in Obsidian.
-					"It rose 3.5, then \\$5 at 3:30. Then 5\\%. Of 1,000!",
-				],
-				[
-					"restores punctuation to Qwen's words when one of them ends in an apostrophe",
-					"The dogs’ bowls are full. Yes!",
-					"The dogs’ bowls are full Yes",
-					"The dogs’ bowls are full. Yes!",
+					"It rose 3.5, then \\$5 at 3:30. Then 5\\%. Of 1,000! Then 3.",
 				],
 				[
 					"restores punctuation to Qwen's words when one of them holds a decimal point",
