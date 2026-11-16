@@ -226,13 +226,21 @@ function parse(answer: unknown): PartTranscript {
 /** Tokens a word that matches no nearby token may be found again in, where the next words follow. */
 const RESYNC_TOKENS = 200;
 
+/** Opening quotes and brackets a word takes from the start of its token. */
+const LEADING = /^[“"‘'([¿¡]+/u;
+/** Punctuation a word takes from the end of its token. */
+const TRAILING = /[.,?!;:…”"’')\]]+$/u;
+
 /**
  * Qwen3 ASR lists its words without punctuation and keeps the punctuation in `text`. Words
  * are matched to the text letter by letter, so the words "re" and "running" both fall in the
- * token "re-running,", and the word that ends a token takes its punctuation.
+ * token "re-running,". A word keeps its own text and gains only the punctuation around its
+ * token: the word that starts a token takes its opening quote, and the one that ends it, its
+ * closing punctuation.
  */
 function punctuated(words: Word[], text: unknown): Word[] {
-	if (typeof text !== "string" || words.some((word) => /[.,?!]/.test(word.text))) return words;
+	// Words that end in punctuation come from a model that punctuates them itself.
+	if (typeof text !== "string" || words.some((word) => /[.,?!]$/.test(word.text))) return words;
 	const tokens = text.split(/\s+/).filter(Boolean);
 	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
 	const keys = tokens.map(bare);
@@ -269,12 +277,10 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		const at = start && step(w, ...start);
 		if (!start || !at) return word;
 		[t, o] = at;
-		if (o !== 0) return word;
-		if (start[1] === 0) return { ...word, text: tokens[start[0]] };
-		return {
-			...word,
-			text: word.text + (/[^\p{L}\p{N}']+$/u.exec(tokens[start[0]])?.[0] ?? ""),
-		};
+		const token = tokens[start[0]];
+		const lead = start[1] === 0 ? (LEADING.exec(token)?.[0] ?? "") : "";
+		const trail = o === 0 ? (TRAILING.exec(token)?.[0] ?? "") : "";
+		return { ...word, text: lead + word.text + trail };
 	});
 }
 
