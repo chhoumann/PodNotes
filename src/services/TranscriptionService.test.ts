@@ -1845,6 +1845,13 @@ describe("TranscriptionService", () => {
 					"Hello world.🙂 Next",
 				],
 				[
+					"restores punctuation after Qwen's numbers, amounts, times and percentages",
+					"It rose 3.5, then $5 at 3:30. Then 5%. Of 1,000!",
+					"It rose 3.5 then $5 at 3:30 Then 5% Of 1,000",
+					// The note escapes "$" and "%", which start math and comments in Obsidian.
+					"It rose 3.5, then \\$5 at 3:30. Then 5\\%. Of 1,000!",
+				],
+				[
 					"restores punctuation to Qwen's words when one of them holds a decimal point",
 					"It rose 3.5 percent, then fell. Odd!",
 					"It rose 3.5 percent then fell Odd",
