@@ -232,6 +232,13 @@ const LEADING = /^[“"‘'([¿¡「『《【（]+/u;
 const TRAILING = /[.,?!;:…—–”"’')\]。，、？！；：」』》】）]+$/u;
 
 /**
+ * A word from a model that punctuates its words itself: one with a mark after its last letter
+ * or digit, as "world." or "world.🙂", or a mark listed as a word of its own.
+ */
+const punctuatedAlready = ({ text }: Word): boolean =>
+	/[.,?!;:][^\p{L}\p{N}]*$/u.test(text) || !/[\p{L}\p{N}]/u.test(text);
+
+/**
  * Qwen3 ASR lists its words without punctuation and keeps the punctuation in `text`. Words
  * are matched to the text letter by letter, so the words "re" and "running" both fall in the
  * token "re-running,". A word keeps its own text and gains only the punctuation around its
@@ -239,8 +246,7 @@ const TRAILING = /[.,?!;:…—–”"’')\]。，、？！；：」』》】�
  * closing punctuation.
  */
 function punctuated(words: Word[], text: unknown): Word[] {
-	// Words that end in punctuation come from a model that punctuates them itself.
-	if (typeof text !== "string" || words.some((word) => /[.,?!]$/.test(word.text))) return words;
+	if (typeof text !== "string" || words.some(punctuatedAlready)) return words;
 	const tokens = text.split(/\s+/).filter(Boolean);
 	// Apostrophes count inside a word, so "we'll" is not "well", and not at its ends, where
 	// they quote it, as in "'Hello".
