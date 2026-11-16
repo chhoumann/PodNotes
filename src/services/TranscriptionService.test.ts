@@ -1827,6 +1827,12 @@ describe("TranscriptionService", () => {
 					'" Hello world " Next',
 				],
 				[
+					"adds nothing to Qwen's words when one starts with a mark the word before could take",
+					'Hello, world! Hi… Next. 你好。再见 Say "yes" now',
+					'Hello ,world Hi …Next 你好 。再见 Say" yes now',
+					'Hello ,world Hi …Next 你好 。再见 Say" yes now',
+				],
+				[
 					"adds nothing to Qwen's words when it lists a semicolon as an entry of its own",
 					"Hello world; Next!",
 					"Hello world ; Next",
@@ -1834,9 +1840,9 @@ describe("TranscriptionService", () => {
 				],
 				[
 					"adds no second mark to a Qwen word that has one beside an emoji",
-					'“Hi there. Hello… Next! 你好。 我们走吧！！ "1️⃣Go now" "ℹ️Info here"',
-					'“🙂Hi there Hello…🙂 Next 你好。🙂 我们走吧 1️⃣"Go now ℹ️"Info here',
-					'“🙂Hi there. Hello…🙂 Next! 你好。🙂 我们走吧！！ 1️⃣"Go now" ℹ️"Info here"',
+					'"1️⃣Go now" "ℹ️Info here."',
+					'1️⃣"Go now ℹ️"Info here',
+					'1️⃣"Go now" ℹ️"Info here."',
 				],
 				[
 					"adds nothing to Qwen's words when one already has punctuation before an emoji",
@@ -1850,6 +1856,12 @@ describe("TranscriptionService", () => {
 					"It rose 3.5 then $5 at 3:30 Then 5% Of 1,000",
 					// The note escapes "$" and "%", which start math and comments in Obsidian.
 					"It rose 3.5, then \\$5 at 3:30. Then 5\\%. Of 1,000!",
+				],
+				[
+					"restores punctuation to Qwen's words when one of them ends in an apostrophe",
+					"The dogs’ bowls are full. Yes!",
+					"The dogs’ bowls are full Yes",
+					"The dogs’ bowls are full. Yes!",
 				],
 				[
 					"restores punctuation to Qwen's words when one of them holds a decimal point",

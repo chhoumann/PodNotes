@@ -231,17 +231,23 @@ const RESYNC_TOKENS = 200;
  * `.,:/` between them, and a currency sign before or `%` after, as "3.5", "$5" or "5%".
  */
 const PLAIN_WORD = /^[$€£¥]?[\p{L}\p{N}]+(?:['’.,:/-][\p{L}\p{N}]+)*%?$/u;
-/** Opening quotes and brackets a word takes from the start of its token. */
-const LEADING = /^[“"‘'([¿¡「『《【（]+/u;
-/** Punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
-const TRAILING = /[.,?!;:…—–”"’')\]。，、？！；：」』》】）]+$/u;
+/** Opening quotes and brackets, and the closing punctuation, a word takes from its token. */
+const OPENING = '“"‘([¿¡「『《【（';
+const CLOSING = '.,?!;:…—–”"’)\\]。，、？！；：」』》】）';
+const LEADING = new RegExp(`^['${OPENING}]+`, "u");
+/** None of `%` or `#`, which are words' own. */
+const TRAILING = new RegExp(`['${CLOSING}]+$`, "u");
+/** A mark before a word's first letter or digit or after its last. Apostrophes, as in "dogs'", do not count. */
+const MARKS = `${OPENING}${CLOSING}`.replace(/[‘’]/g, "");
+const EDGE_MARK = new RegExp(`^[^\\p{L}\\p{N}]*[${MARKS}]|[${MARKS}][^\\p{L}\\p{N}]*$`, "u");
 
 /**
- * A word from a model that punctuates its words itself: one with a mark after its last letter
- * or digit, as "world." or "world.🙂", or a mark listed as a word of its own.
+ * A word from a model that punctuates its words itself: one with a mark before its first
+ * letter or digit or after its last, as ",world", "world." or "world.🙂", or a mark listed
+ * as a word of its own.
  */
 const punctuatedAlready = ({ text }: Word): boolean =>
-	/[.,?!;:][^\p{L}\p{N}]*$/u.test(text) || !/[\p{L}\p{N}]/u.test(text);
+	EDGE_MARK.test(text) || !/[\p{L}\p{N}]/u.test(text);
 
 /**
  * Qwen3 ASR lists its words without punctuation and keeps the punctuation in `text`. Words
