@@ -1693,6 +1693,31 @@ describe("TranscriptionService", () => {
 				);
 			});
 
+			test("Qwen's words keep taking punctuation from its text after a long stretch the words leave out", async () => {
+				const said = "so we kept re running it Then it was running".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Um, uh, you know, like, I mean, honestly, okay, right, well, look, so we kept re-running it. Then it was running. Hi!",
+						words: [
+							...said.map((word, index) => ({
+								word,
+								start: 1.2 + index / 5,
+								end: 1.4 + index / 5,
+							})),
+							{ word: "Hi", start: 10.16, end: 10.5 },
+						],
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1.2")}) so we kept re running it. Then it was running.\n\n` +
+						`[00:00:10](${link("10.16")}) Hi!`,
+				);
+			});
+
 			test("Voxtral's segments from two parts of at most 900 s become paragraphs timed from the episode's start", async () => {
 				const stream = MP3_STREAMS.mpeg25At8Kbps;
 				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
