@@ -6,6 +6,7 @@ export type FailureKind =
 	| "auth"
 	| "credits"
 	| "model-unavailable"
+	| "privacy"
 	| "rejected"
 	| "unfetched"
 	| "rate-limited"
@@ -44,6 +45,8 @@ const SENTENCES: Record<FailureKind, (context: FailureContext, status?: number) 
 		`Your ${provider} account is out of credit. Add credit there, then try again.`,
 	"model-unavailable": ({ provider, model }) =>
 		`${provider} does not offer the ${model} model to this API key.`,
+	privacy: ({ provider, model }) =>
+		`${provider} does not offer the ${model} model under your ${provider} privacy settings. Change them there, or choose another model in the transcript settings.`,
 	rejected: ({ provider }) => `${provider} could not transcribe this audio.`,
 	unfetched: ({ provider }) => `${provider} could not fetch the episode.`,
 	"rate-limited": ({ provider }) =>

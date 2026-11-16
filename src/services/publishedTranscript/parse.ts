@@ -187,6 +187,6 @@ export function untimed(paragraphs: string[]): ParsedTranscript | undefined {
 	return isNonEmpty(paragraphs) ? { kind: "untimed", paragraphs } : undefined;
 }
 
-function isNonEmpty<T>(items: readonly T[]): items is NonEmpty<T> {
+export function isNonEmpty<T>(items: readonly T[]): items is NonEmpty<T> {
 	return items.length > 0;
 }

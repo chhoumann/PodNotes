@@ -410,6 +410,7 @@ function savedByThisVersion(released: Record<string, unknown>): Record<string, u
 		headsetPreviousTrack: "captureTimestamp",
 		headsetNextTrack: "skipForward",
 		elevenLabsSecretId: "",
+		openRouterSecretId: "",
 		transcript: { ...(released.transcript as object), provider: "elevenlabs", model: "" },
 	};
 	delete data.feedCache;

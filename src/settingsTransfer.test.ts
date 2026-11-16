@@ -215,13 +215,20 @@ describe("serializeSettings", () => {
 			openAISecretId: "podnotes-openai-api-key",
 			deepgramSecretId: "podnotes-deepgram-api-key",
 			elevenLabsSecretId: "podnotes-elevenlabs-api-key",
+			openRouterSecretId: "podnotes-openrouter-api-key",
 		});
-		const secrets = { openAI: "sk-secret", deepgram: "dg-secret", elevenLabs: "el-secret" };
+		const secrets = {
+			openAI: "sk-secret",
+			deepgram: "dg-secret",
+			elevenLabs: "el-secret",
+			openRouter: "or-secret",
+		};
 
 		const without = serializeSettings(settings, {}, "2.16.0", NOW, new Map());
 		expect(without.settings).not.toHaveProperty("openAISecretId");
 		expect(without.settings).not.toHaveProperty("deepgramSecretId");
 		expect(without.settings).not.toHaveProperty("elevenLabsSecretId");
+		expect(without.settings).not.toHaveProperty("openRouterSecretId");
 
 		const withKeys = serializeSettings(settings, { secrets }, "2.16.0", NOW, new Map());
 		expect(withKeys.version).toBe(2);
@@ -604,14 +611,19 @@ describe("parseImport", () => {
 				type: SETTINGS_EXPORT_TYPE,
 				version: 2,
 				settings: { defaultVolume: 0.5, openAISecretId: "not-transferable" },
-				secrets: { openAI: " sk ", deepgram: "dg", elevenLabs: "el" },
+				secrets: { openAI: " sk ", deepgram: "dg", elevenLabs: "el", openRouter: "or" },
 			}),
 		);
 
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.settings).not.toHaveProperty("openAISecretId");
-			expect(result.secrets).toEqual({ openAI: "sk", deepgram: "dg", elevenLabs: "el" });
+			expect(result.secrets).toEqual({
+				openAI: "sk",
+				deepgram: "dg",
+				elevenLabs: "el",
+				openRouter: "or",
+			});
 		}
 	});
 
@@ -910,15 +922,15 @@ describe("the transcription provider in a settings file", () => {
 
 	it("imports the provider and model a file names, also ones this version does not have", () => {
 		const settings = makeSettings();
-		settings.transcript.provider = "openrouter";
-		settings.transcript.model = "x-ai/grok-stt-2.0";
+		settings.transcript.provider = "assemblyai";
+		settings.transcript.model = "universal-3-6-pro";
 		const file = JSON.stringify(serializeSettings(settings, {}, "2.26.0", NOW, new Map()));
 
 		const { transcript } = imported(makeSettings(), file);
 
 		expect([transcript.provider, transcript.model]).toEqual([
-			"openrouter",
-			"x-ai/grok-stt-2.0",
+			"assemblyai",
+			"universal-3-6-pro",
 		]);
 	});
 
@@ -986,10 +998,13 @@ describe("describeSecrets (#168)", () => {
 		expect(describeSecrets({})).toEqual([]);
 		expect(describeSecrets({ openAI: "sk" })).toEqual(["OpenAI API key"]);
 		expect(describeSecrets({ deepgram: "dg" })).toEqual(["Deepgram API key"]);
-		expect(describeSecrets({ openAI: "sk", deepgram: "dg", elevenLabs: "el" })).toEqual([
+		expect(
+			describeSecrets({ openAI: "sk", deepgram: "dg", elevenLabs: "el", openRouter: "or" }),
+		).toEqual([
 			"OpenAI API key",
 			"Deepgram API key",
 			"ElevenLabs API key",
+			"OpenRouter API key",
 		]);
 	});
 

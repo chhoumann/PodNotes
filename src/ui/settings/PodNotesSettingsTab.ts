@@ -40,12 +40,18 @@ import type { Episode } from "src/types/Episode";
 import type { PodcastFeed } from "src/types/PodcastFeed";
 import { NEXT_TRACK_ACTIONS, PREVIOUS_TRACK_ACTIONS } from "src/types/Headset";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
-import { get } from "svelte/store";
+import { get, type Readable } from "svelte/store";
 import { exportOPML, importOPML } from "src/opml";
 import { isOption } from "src/persistence/codecUtils";
 import { decodePodNotesData, PODNOTES_DATA_SCHEMA_VERSION } from "src/persistence/podNotesData";
 import { privateFeedAddresses, protectPrivateFeeds } from "src/services/privateFeeds";
-import { offeredModels, PROVIDER_LABELS, transcriptionChoice } from "src/services/transcription";
+import {
+	catalogs,
+	offeredModels,
+	PROVIDER_LABELS,
+	refreshModels,
+	transcriptionChoice,
+} from "src/services/transcription";
 import {
 	describeSecrets,
 	mergeImportedSettings,
@@ -483,9 +489,13 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 		return complete;
 	}
 
-	private follow(setting: Setting, show: (settings: IPodNotesSettings) => void): () => void {
+	private follow(
+		setting: Setting,
+		show: (settings: IPodNotesSettings) => void,
+		store: Readable<unknown> = plugin,
+	): () => void {
 		const { win } = setting.settingEl;
-		const unsubscribe = plugin.subscribe(() => show(this.plugin.settings));
+		const unsubscribe = store.subscribe(() => show(this.plugin.settings));
 		const stop = () => {
 			if (!this.follows.delete(stop)) return;
 			win.removeEventListener("pagehide", stop);
@@ -671,27 +681,37 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 			name: "Model",
 			visible: () => transcriptionChoice(this.plugin.settings).provider !== undefined,
 			render: (setting) => {
-				let stop = () => {};
+				const stops: (() => void)[] = [];
 				setting.addDropdown((dropdown) => {
 					dropdown.onChange((model) => {
 						this.plugin.settings.transcript.model = model;
 						this.changed();
 					});
-					stop = this.follow(setting, (settings) => {
+					const draw = (settings: IPodNotesSettings) => {
 						const choice = transcriptionChoice(settings);
 						if (choice.provider === undefined) return;
+						void refreshModels(choice.provider);
 						const models = offeredModels(choice.provider);
+						const name = ({ label, ends }: { label: string; ends?: string }) =>
+							ends ? `${label}, ends ${ends}` : label;
 						dropdown.selectEl.empty();
-						dropdown.addOption("", `Recommended (${models[0].label})`);
-						for (const { id, label } of models) dropdown.addOption(id, label);
-						// A model a newer PodNotes stored stays selected, under its stored name.
+						dropdown.addOption("", `Recommended (${name(models[0])})`);
+						for (const model of models) dropdown.addOption(model.id, name(model));
+						// A stored model that cannot run stays selected, so the row shows what was chosen.
 						if (choice.unknownModel) {
 							dropdown.addOption(choice.unknownModel, choice.unknownModel);
 						}
+						if (choice.withdrawnModel) {
+							const { id, label } = choice.withdrawnModel;
+							dropdown.addOption(id, `${label}, no longer offered`);
+						}
 						dropdown.setValue(settings.transcript.model);
-					});
+					};
+					stops.push(this.follow(setting, draw), this.follow(setting, draw, catalogs));
 				});
-				return stop;
+				return () => {
+					for (const stop of stops) stop();
+				};
 			},
 		};
 	}

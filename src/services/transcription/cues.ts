@@ -51,6 +51,14 @@ function isTimed(parts: readonly TranscribedPart[]): parts is readonly TimedPart
 	return parts.every(({ transcript }) => !transcript || "words" in transcript);
 }
 
+/**
+ * Seconds to the millisecond, as finely as providers time words. A part's start is a sum of
+ * frame lengths, so a word's time in the episode would otherwise carry float noise into its link.
+ */
+function toMilliseconds(seconds: number): number {
+	return Math.round(seconds * 1000) / 1000;
+}
+
 /** Speakers are numbered in the order they first speak. A provider's label names a speaker only within its own part. */
 function cuesOf(parts: readonly TimedPart[], speakers: boolean): TranscriptCue[] {
 	const numbers = new Map<string, string>();
@@ -62,15 +70,15 @@ function cuesOf(parts: readonly TimedPart[], speakers: boolean): TranscriptCue[]
 	return parts.flatMap(({ start, transcript }, index): TranscriptCue[] =>
 		transcript
 			? transcript.words.map((word) => ({
-					start: start + word.start,
-					end: start + word.end,
+					start: toMilliseconds(start + word.start),
+					end: toMilliseconds(start + word.end),
 					speaker:
 						speakers && word.speaker !== undefined
 							? numberOf(`${index}:${word.speaker}`)
 							: undefined,
 					text: word.text,
 				}))
-			: [{ start, text: failedPartMarker(index) }],
+			: [{ start: toMilliseconds(start), text: failedPartMarker(index) }],
 	);
 }
 

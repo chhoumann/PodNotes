@@ -43,12 +43,16 @@ import {
 	installElevenLabsStub,
 	installItunesStub,
 	installOpenAIStub,
+	installOpenRouterStub,
 	itunesSearchTerms,
+	openRouterCatalogReads,
+	openRouterRequests,
 	pubDate,
 	removeDeepgramTripwire,
 	removeElevenLabsStub,
 	removeItunesStub,
 	removeOpenAIStub,
+	removeOpenRouterStub,
 	startFixtureServer,
 	transcriptionUploads,
 } from "./journey/fixtures";
@@ -887,6 +891,125 @@ describe("resilience journeys", () => {
 		]);
 		expect(server.requests().filter((request) => request.endsWith(".wav"))).toEqual([]);
 	}, 60_000);
+
+	describe("OpenRouter", () => {
+		const secretId = "podnotes-openrouter-api-key-464646";
+		/** Seeds `show` as playing `spoken` on OpenRouter's `model`, with a key and the stub. */
+		const transcribeWithOpenRouter = async (
+			show: FixtureFeed,
+			spoken: FixtureEpisode,
+			model: string,
+		) => {
+			const context = getContext();
+			const { obsidian, sandbox } = context;
+			const server = await serve(show);
+			const previousSecret = await obsidian.dev.evalJson<string | null>(
+				`app.secretStorage.getSecret(${jsLiteral(secretId)})`,
+			);
+			onTestFinished(() =>
+				obsidian.dev.evalJson(
+					previousSecret === null
+						? `app.secretStorage.deleteSecret(${jsLiteral(secretId)}), true`
+						: `app.secretStorage.setSecret(${jsLiteral(secretId)}, ${jsLiteral(previousSecret)}), true`,
+				),
+			);
+			await obsidian.dev.evalJson(
+				`app.secretStorage.setSecret(${jsLiteral(secretId)}, "sk-or-journey-test"), true`,
+			);
+			await seedLibrary(context, server, {
+				subscriptions: [show],
+				current: storedEpisode(server, show, spoken),
+				transcription: { provider: "openrouter", secretId, model },
+			});
+			await installOpenRouterStub(
+				obsidian,
+				"Journey transcript opens here.",
+				"A second speaker answers.",
+			);
+			onTestFinished(() => removeOpenRouterStub(obsidian));
+			const notePath = `Transcripts/${show.title}/${spoken.title}.md`;
+
+			await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
+			await sandbox.waitForExists(notePath, { timeoutMs: 30_000 });
+
+			const link = (time: number) =>
+				`obsidian://podnotes?episodeName=Spoken%20Episode&url=${encodeURIComponent(server.feedUrl(show))}&time=${time}`;
+			expect(
+				(await readVaultText(obsidian, sandbox.path(notePath))).replace(
+					/^Date: .+$/m,
+					"Date: <date>",
+				),
+			).toBe(
+				`# Spoken Episode\n\nPodcast: ${show.title}\nDate: <date>\n\n` +
+					`[00:00:00](${link(0)}) **1:** Journey transcript opens here.\n\n` +
+					`[00:00:12](${link(12)}) **2:** A second speaker answers.`,
+			);
+			expect(await openRouterCatalogReads(obsidian)).toEqual([null]);
+			return server;
+		};
+
+		test("J-TR-09 a public episode goes to Scribe v2 by its address in one request, and its audio is not fetched", async () => {
+			const { obsidian } = getContext();
+			const spoken: FixtureEpisode = {
+				title: "Spoken Episode",
+				seconds: 4,
+				pubDate: pubDate(0),
+			};
+			const show: FixtureFeed = {
+				title: "Journey OpenRouter Scribe",
+				slug: "openrouter-scribe",
+				artwork: true,
+				episodes: [spoken],
+			};
+
+			const server = await transcribeWithOpenRouter(show, spoken, "elevenlabs/scribe-v2");
+
+			expect(await openRouterRequests(obsidian)).toEqual([
+				{
+					method: "POST",
+					authorization: "Bearer sk-or-journey-test",
+					contentType: "application/json",
+					model: "elevenlabs/scribe-v2",
+					diarize: true,
+					url: server.mediaUrl(show, spoken),
+					audioBytes: 0,
+					sha256: null,
+				},
+			]);
+			expect(server.requests().filter((request) => request.endsWith(".wav"))).toEqual([]);
+		}, 60_000);
+
+		test("J-TR-10 Grok STT 2.0 gets the episode's audio as base64 in one request", async () => {
+			const { obsidian } = getContext();
+			const spoken: FixtureEpisode = {
+				title: "Spoken Episode",
+				seconds: 4,
+				pubDate: pubDate(0),
+			};
+			const show: FixtureFeed = {
+				title: "Journey OpenRouter Grok",
+				slug: "openrouter-grok",
+				artwork: true,
+				episodes: [spoken],
+			};
+
+			const server = await transcribeWithOpenRouter(show, spoken, "");
+
+			const audio = server.audio(show, spoken);
+			expect(await openRouterRequests(obsidian)).toEqual([
+				{
+					method: "POST",
+					authorization: "Bearer sk-or-journey-test",
+					contentType: "application/json",
+					model: "x-ai/grok-stt-2.0",
+					diarize: true,
+					url: null,
+					audioBytes: audio.byteLength,
+					sha256: createHash("sha256").update(audio).digest("hex"),
+				},
+			]);
+		}, 60_000);
+	});
 
 	test("J-TR-05 feed text cannot give the transcript note a block ID or an inline field", async () => {
 		const context = getContext();

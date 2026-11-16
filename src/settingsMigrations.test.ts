@@ -213,12 +213,12 @@ describe("migrateTranscriptSettings", () => {
 
 	it("keeps a provider and a model this version does not have", () => {
 		const migrated = migrateTranscriptSettings(
-			{ provider: "openrouter", model: "x-ai/grok-stt-2.0" },
+			{ provider: "assemblyai", model: "universal-3-6-pro" },
 			true,
 		);
 
-		expect(migrated.provider).toBe("openrouter");
-		expect(migrated.model).toBe("x-ai/grok-stt-2.0");
+		expect(migrated.provider).toBe("assemblyai");
+		expect(migrated.model).toBe("universal-3-6-pro");
 	});
 
 	it("coalesces non-boolean enabled / non-string fields to defaults", () => {

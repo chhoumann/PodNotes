@@ -892,6 +892,9 @@ export const setIcon = (el: HTMLElement | null, icon: string) => {
 	el.setAttribute("data-icon", icon);
 };
 
+export const arrayBufferToBase64 = (buffer: ArrayBuffer): string =>
+	Buffer.from(buffer).toString("base64");
+
 export const requestUrl = async () => ({
 	status: 200,
 	headers: {},

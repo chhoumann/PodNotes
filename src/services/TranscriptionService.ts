@@ -17,7 +17,7 @@ import {
 	renderTranscriptBody,
 	timestampStyle,
 } from "./publishedTranscript";
-import { transcribe, transcriptionChoice } from "./transcription";
+import { refreshModels, transcribe, transcriptionChoice } from "./transcription";
 
 export const TRANSCRIBE_FROM_AUDIO_COMMAND = "Transcribe current episode from audio";
 
@@ -256,6 +256,7 @@ export class TranscriptionService {
 		updateNotice: (message: string) => void,
 	): Promise<Outcome> {
 		const { settings, credentials, feeds } = this.plugin;
+		await this.waitForLifecycle(refreshModels(settings.transcript.provider));
 		const choice = transcriptionChoice(settings);
 		if (choice.provider === undefined) throw new Error(unknownProvider(choice.label));
 		const apiKey = credentials.get(settings, choice.provider);
