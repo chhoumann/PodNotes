@@ -1791,6 +1791,12 @@ describe("TranscriptionService", () => {
 					"Use C++ for systems. It is -5 degrees, 5\\% more today. Then 3.",
 				],
 				[
+					"restores single quotes around Qwen's words",
+					"'Hello world.' It's done. Next.",
+					"Hello world It's done Next",
+					"'Hello world.' It's done. Next.",
+				],
+				[
 					"restores punctuation to Qwen's words when one of them holds a decimal point",
 					"It rose 3.5 percent, then fell. Odd!",
 					"It rose 3.5 percent then fell Odd",

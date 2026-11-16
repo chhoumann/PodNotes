@@ -242,7 +242,8 @@ function punctuated(words: Word[], text: unknown): Word[] {
 	// Words that end in punctuation come from a model that punctuates them itself.
 	if (typeof text !== "string" || words.some((word) => /[.,?!]$/.test(word.text))) return words;
 	const tokens = text.split(/\s+/).filter(Boolean);
-	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
+	// Letters and digits only, so a quote mark matches nothing, as in "'Hello" for "Hello".
+	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 	const keys = tokens.map(bare);
 	const wordKeys = words.map((word) => bare(word.text));
 	/** Where word `w` ends when it starts at offset `o` of token `t`. */
