@@ -110,6 +110,42 @@ const WATCH = `(() => {
 	const openRouterWords = (sentence, speaker, from) => words(sentence, speaker, from).map(({ punctuated_word, start, end }) => ({ word: punctuated_word, start, end, speaker, speaker_label: "speaker_" + speaker, confidence: 0.99 }));
 	const openrouter = { text: text + " " + reply, words: [...openRouterWords(text, 0, 0), ...openRouterWords(reply, 1, 12)] };
 	const openrouterCatalog = { data: ${jsLiteral(OPENROUTER_MODELS)}.map((id) => ({ id, expiration_date: null })) };
+	// Grok's MP3 uploads are heard as a diarizing model hears them: a tone under 500 Hz is one
+	// voice and a higher one another, labeled in the order they first sound in the request, with
+	// a word for each turn. Other OpenRouter requests get the fixed answer.
+	const hearOpenRouter = async (request, entry) => {
+		if (request.contentType !== "application/json") return openrouter;
+		const audio = JSON.parse(new TextDecoder().decode(request.body)).input_audio ?? {};
+		if (audio.format !== "mp3" || !audio.data) return openrouter;
+		const bytes = Uint8Array.from(atob(audio.data), (char) => char.charCodeAt(0));
+		const decoded = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(bytes.buffer);
+		entry.decodedSeconds = Math.round(decoded.duration * 1000) / 1000;
+		const samples = decoded.getChannelData(0);
+		const step = decoded.sampleRate / 4;
+		const labels = new Map();
+		const words = [];
+		let before;
+		for (let at = 0; at + step <= samples.length; at += step) {
+			let energy = 0;
+			let crossings = 0;
+			for (let index = at + 1; index < at + step; index++) {
+				energy += samples[index] * samples[index];
+				if (samples[index] >= 0 !== samples[index - 1] >= 0) crossings++;
+			}
+			// A tone of f Hz crosses zero 2f times a second, so f is twice the crossings in 0.25 s.
+			const voice = energy / step < 0.001 ? undefined : crossings * 2 < 500 ? "Low" : "High";
+			const [start, end] = [at / decoded.sampleRate, (at + step) / decoded.sampleRate];
+			if (voice && voice === before) words[words.length - 1].end = end;
+			else if (voice) {
+				if (!labels.has(voice)) labels.set(voice, labels.size);
+				const speaker = labels.get(voice);
+				words.push({ word: voice + " voice.", start, end, speaker, speaker_label: "speaker_" + speaker, confidence: 0.99 });
+			}
+			before = voice;
+		}
+		entry.heardSpeakers = labels.size;
+		return { text: words.map(({ word }) => word).join(" "), words };
+	};
 	// A request that names an address in place of a file is a few hundred bytes: multipart
 	// with source_url for ElevenLabs, JSON with input_audio.url for OpenRouter.
 	const namedAddress = (request) => {
@@ -130,6 +166,7 @@ const WATCH = `(() => {
 	ipc.send = function (channel, replyChannel, request, ...rest) {
 		if (channel === "request-url" && typeof request?.url === "string") {
 			const method = (request.method ?? "GET").toUpperCase();
+			const entry = { via: "requestUrl", method, url: logged(request.url) };
 			const answer = request.url.startsWith("https://api.openai.com/")
 				? { text }
 				: request.url.startsWith("https://api.deepgram.com/")
@@ -137,17 +174,22 @@ const WATCH = `(() => {
 					: request.url.startsWith("https://api.elevenlabs.io/")
 						? elevenlabs
 						: request.url === ${jsLiteral(OPENROUTER_TRANSCRIPTIONS)}
-							? openrouter
+							? hearOpenRouter(request, entry)
 							: request.url.startsWith(${jsLiteral(OPENROUTER_CATALOG)})
 								? openrouterCatalog
 								: null;
 			if (answer) {
-				entries.push({ via: "requestUrl", method, url: logged(request.url), answeredBy: "fixture provider", contentType: request.contentType, uploadBytes: request.body?.byteLength ?? 0, sourceUrl: namedAddress(request) });
-				const body = new TextEncoder().encode(JSON.stringify(answer)).buffer;
-				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body }));
+				entries.push(Object.assign(entry, { answeredBy: "fixture provider", contentType: request.contentType, uploadBytes: request.body?.byteLength ?? 0, sourceUrl: namedAddress(request) }));
+				// Audio the decoder refuses is answered as OpenRouter answers audio it cannot read.
+				Promise.resolve(answer)
+					.then((json) => ({ status: 200, json }), () => {
+						entry.decodedSeconds = "undecodable";
+						return { status: 400, json: { error: { message: "Invalid audio file", code: 400 } } };
+					})
+					.then(({ status, json }) => ipc.emit(replyChannel, {}, { status, headers: { "content-type": "application/json" }, body: new TextEncoder().encode(JSON.stringify(json)).buffer }));
 				return;
 			}
-			entries.push({ via: "requestUrl", method, url: logged(request.url) });
+			entries.push(entry);
 		}
 		return originalSend.call(ipc, channel, replyChannel, request, ...rest);
 	};

@@ -226,7 +226,10 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
 - `.claude/skills/verify/net.mjs` runs as `watch`, `log` or `unwatch`. It logs
   every `fetch` and `requestUrl` call PodNotes makes, without query strings,
   and answers ElevenLabs, Deepgram, OpenRouter and OpenAI with a fixture
-  provider while it watches.
+  provider while it watches. It decodes Grok's MP3 uploads with Chromium's
+  decoder and hears a tone under 500 Hz as one speaker and a higher tone as
+  another, and logs each upload's `decodedSeconds` and `heardSpeakers`. Audio
+  it cannot decode is answered with a 400.
 
 - `.claude/skills/verify/ui.mjs` sends trusted input through
   `obsidian dev:cdp`. Its verbs are `click <css> [--text <s>] [--right]`,

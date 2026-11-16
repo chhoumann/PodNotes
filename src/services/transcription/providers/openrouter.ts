@@ -80,6 +80,7 @@ const MODELS: NonEmpty<ModelProfile & { readonly body: Body }> = [
 		speakers: true,
 		url: false,
 		...PART_CAPS,
+		mergeSpeakers: true,
 		body: grok,
 	},
 	{
@@ -88,6 +89,8 @@ const MODELS: NonEmpty<ModelProfile & { readonly body: Body }> = [
 		speakers: true,
 		url: true,
 		...PART_CAPS,
+		// Its reel heard 4 voices on a show with 10.
+		mergeSpeakers: false,
 		body: topLevelDiarize,
 	},
 	{
@@ -96,6 +99,7 @@ const MODELS: NonEmpty<ModelProfile & { readonly body: Body }> = [
 		speakers: true,
 		url: false,
 		...PART_CAPS,
+		mergeSpeakers: false,
 		body: topLevelDiarize,
 	},
 ];

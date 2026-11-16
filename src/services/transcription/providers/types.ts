@@ -16,6 +16,12 @@ export interface ModelProfile {
 	readonly maxUploadBytes: number;
 	/** The most audio, in seconds, one request may carry. */
 	readonly maxSeconds?: number;
+	/**
+	 * Matches speaker labels across an episode's parts with one more request, a minute or two
+	 * of audio that holds a clip of each part's every voice. Only where measured, because a
+	 * model can hear different voices in it as one.
+	 */
+	readonly mergeSpeakers?: boolean;
 }
 
 export interface Word {
