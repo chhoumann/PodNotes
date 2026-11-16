@@ -80,19 +80,20 @@ main.js raw: 328677 bytes; budget 330000 bytes; 1323 bytes remaining
 main.js gzip (level 9): 107399 bytes; budget 107399 bytes; 0 bytes remaining
 ```
 
-On 2026-11-16 it rose from 107,399 by 309 bytes for Voxtral Mini Transcribe 3
-and Qwen3 ASR on OpenRouter, with Qwen3 ASR's punctuation restored from its
-text. With them:
+On 2026-11-16 the gzip budget rose from 107,399 by 430 bytes, and the raw budget
+from 330,000 by 11, for Voxtral Mini Transcribe 3 and Qwen3 ASR on OpenRouter,
+with Qwen3 ASR's punctuation restored from its text, also after a stretch of
+text its words leave out. With them:
 
 ```text
-main.js raw: 329713 bytes; budget 330000 bytes; 287 bytes remaining
-main.js gzip (level 9): 107708 bytes; budget 107708 bytes; 0 bytes remaining
+main.js raw: 330011 bytes; budget 330011 bytes; 0 bytes remaining
+main.js gzip (level 9): 107829 bytes; budget 107829 bytes; 0 bytes remaining
 ```
 
-On 2026-11-16 both rose for the OpenAI-compatible server provider: from 330,000
-raw by 3,342 bytes, and from 107,708 gzip by 1,072 bytes. That is the provider, a
-verbose_json reader shared with OpenRouter, Whisper's word pieces joined, and
-punctuation found again in the answer's text. With it:
+On 2026-11-16 both rose for the OpenAI-compatible server provider: from 330,011
+raw by 3,331 bytes, and from 107,829 gzip by 951 bytes. That is the provider, a
+verbose_json reader shared with OpenRouter, and Whisper's word pieces joined.
+With it:
 
 ```text
 main.js raw: 333342 bytes; budget 333342 bytes; 0 bytes remaining
