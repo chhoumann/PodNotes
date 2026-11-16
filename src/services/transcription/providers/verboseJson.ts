@@ -107,8 +107,10 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		if (!start || !at) return word;
 		[t, o] = at;
 		const token = tokens[start[0]];
-		const lead = start[1] === 0 ? (LEADING.exec(token)?.[0] ?? "") : "";
-		const trail = o === 0 ? (TRAILING.exec(token)?.[0] ?? "") : "";
+		// A word that already starts or ends with such marks keeps them and gains no more.
+		const lead =
+			start[1] === 0 && !LEADING.test(word.text) ? (LEADING.exec(token)?.[0] ?? "") : "";
+		const trail = o === 0 && !TRAILING.test(word.text) ? (TRAILING.exec(token)?.[0] ?? "") : "";
 		return { ...word, text: lead + word.text + trail };
 	});
 }

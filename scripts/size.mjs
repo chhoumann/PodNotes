@@ -9,8 +9,8 @@ try {
 	const bundle = readFileSync(path);
 	if (!bundle.length) throw new Error(`${path} is empty. Run npm run build first.`);
 	const measurements = [
-		{ name: "raw", bytes: bundle.length, budget: 333_600 },
-		{ name: "gzip (level 9)", bytes: gzipSync(bundle, { level: 9 }).length, budget: 108_938 },
+		{ name: "raw", bytes: bundle.length, budget: 333_633 },
+		{ name: "gzip (level 9)", bytes: gzipSync(bundle, { level: 9 }).length, budget: 108_948 },
 	];
 	const rows = measurements.map(({ name, bytes, budget }) => {
 		const overage = Math.max(0, bytes - budget);
