@@ -55,6 +55,20 @@ describe("model review", () => {
 		expect(candidates).toEqual([]);
 	});
 
+	it("reports a newer model with an end date still to come, and drops one ending today or before", () => {
+		const { newer } = review({
+			curated: [{ provider: "openrouter", id: "x-ai/grok-stt-2.0" }],
+			catalog: [
+				{ id: "x-ai/grok-stt-2.0" },
+				{ id: "x-ai/grok-stt-3.0", expiration_date: "2027-06-01" },
+				{ id: "x-ai/grok-stt-2.5", expiration_date: "2026-11-01" },
+				{ id: "x-ai/grok-stt-2.6", expiration_date: "2026-11-14" },
+			],
+			today: "2026-11-14",
+		});
+		expect(newer.map(({ model }) => model.id)).toEqual(["x-ai/grok-stt-3.0"]);
+	});
+
 	it("lists a model of no curated family once as a candidate", () => {
 		expect(result.candidates.map(({ id }) => id)).toEqual([
 			"elevenlabs/scribe-v2-medical",

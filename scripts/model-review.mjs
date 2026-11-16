@@ -112,16 +112,20 @@ export function review({ curated, catalog, today }) {
 
 	const newer = [];
 	const candidates = [];
-	const fresh = catalog
-		.filter((model) => !model.expiration_date)
+	// A model is offered until its end date, as the plugin's registry has it, so a newer one
+	// is reported while offered. A model with an end date is no candidate to start using.
+	const offered = catalog
+		.filter((model) => !model.expiration_date || model.expiration_date.slice(0, 10) > today)
 		.sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
-	for (const model of fresh) {
+	for (const model of offered) {
 		const { family, version } = parse("", model.id);
 		const own = families.get(family);
-		if (!own) candidates.push(model);
-		else if (compare(version, latest(own).version) > 0) {
+		if (own && compare(version, latest(own).version) > 0) {
 			newer.push({ model, than: latest(own).id });
-		} else if (!own.some((curatedModel) => compare(version, curatedModel.version) === 0)) {
+		} else if (
+			!model.expiration_date &&
+			!own?.some((curatedModel) => compare(version, curatedModel.version) === 0)
+		) {
 			candidates.push(model);
 		}
 	}
