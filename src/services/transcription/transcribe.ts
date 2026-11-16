@@ -54,7 +54,10 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	let lastFailure: TranscriptionError | undefined;
 	let sameSpeaker: SameSpeaker | undefined;
 
-	const url = model.url ? await publicAudioUrl(episode, job.feeds) : undefined;
+	// An address goes in one request, so an episode the feed says is longer than the model
+	// takes in one is uploaded in parts.
+	const fits = (episode.duration ?? 0) <= (model.maxSeconds ?? Infinity);
+	const url = model.url && fits ? await publicAudioUrl(episode, job.feeds) : undefined;
 	if (url) {
 		onProgress(progress);
 		try {
@@ -71,10 +74,11 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 		onProgress("Fetching episode audio...");
 		const audio = await getEpisodeAudioBuffer(episode);
 		if (signal.aborted) throw signal.reason;
-		const files = await splitAudio(audio, {
-			maxBytes: model.maxUploadBytes,
-			maxSeconds: model.maxSeconds,
-		});
+		const files = await splitAudio(
+			audio,
+			{ maxBytes: model.maxUploadBytes, maxSeconds: model.maxSeconds },
+			signal,
+		);
 		// One part at a time: an upload is held in memory whole, and a failure that ends the
 		// job ends it before the next part is sent.
 		for (const [index, { file, start }] of files.entries()) {
