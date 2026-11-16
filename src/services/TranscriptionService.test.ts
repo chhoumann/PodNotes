@@ -2596,6 +2596,54 @@ describe("TranscriptionService", () => {
 			expect(sizes[1] + sizes[2]).toBe(frames * stream.frameBytes);
 		});
 
+		test("a part with no speech keeps the episode's other parts timed", async () => {
+			const plugin = useServer();
+			const stream = MP3_STREAMS.mpeg1At96Kbps;
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: mp3Bytes(stream, Math.ceil(30_000_000 / stream.frameBytes)).buffer,
+				extension: "mp3",
+			});
+			let part = 0;
+			providerMock.mockImplementation(async () =>
+				part++ === 0
+					? Response.json({ task: "transcribe", text: "", words: [], segments: [] })
+					: Response.json(verbose),
+			);
+
+			await transcribe(plugin);
+
+			expect(part).toBe(2);
+			expect(savedNote(plugin)).toMatch(/^\[\d\d:\d\d:\d\d\]\(obsidian:\/\/podnotes/m);
+		});
+
+		test("a verbose_json answer with text and no times keeps its text", async () => {
+			providerMock.mockImplementation(async () =>
+				Response.json({
+					task: "transcribe",
+					text: "Hello there.",
+					words: [],
+					segments: [],
+				}),
+			);
+			const plugin = useServer();
+
+			await transcribe(plugin);
+
+			expect(savedNote(plugin)).toContain("Hello there.");
+		});
+
+		test("an address with a user name and password sends nothing and names no part of it", async () => {
+			const plugin = useServer({ serverUrl: "http://review:SECRET@127.0.0.1:8000/v1" });
+
+			const notice = await finalNotice(plugin);
+
+			expect(providerMock).not.toHaveBeenCalled();
+			expect(notice).not.toContain("SECRET");
+			expect(notice).toBe(
+				"Transcription failed: Enter the address of your OpenAI-compatible server, starting with http:// or https:// and with no user name or password, in the transcript settings.",
+			);
+		});
+
 		test("words a server lists without punctuation take their punctuation from its text", async () => {
 			providerMock.mockImplementation(async () =>
 				Response.json({
@@ -2719,7 +2767,7 @@ describe("TranscriptionService", () => {
 				new TranscriptionService(plugin).transcribeCurrentEpisodeFromAudio();
 
 				expect(noticeMessages).toEqual([
-					"Enter the address of your OpenAI-compatible server, starting with http:// or https://, in the transcript settings.",
+					"Enter the address of your OpenAI-compatible server, starting with http:// or https:// and with no user name or password, in the transcript settings.",
 				]);
 				expect(providerMock).not.toHaveBeenCalled();
 			},

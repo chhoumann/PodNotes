@@ -144,7 +144,7 @@ export class TranscriptionService {
 		if (choice.provider === undefined) return unknownProvider(choice.label);
 		const { provider, label, server } = choice;
 		if (server && !server.endpoint) {
-			return `Enter the address of your ${label}, starting with http:// or https://, in the transcript settings.`;
+			return `Enter the address of your ${label}, starting with http:// or https:// and with no user name or password, in the transcript settings.`;
 		}
 		if (server && !choice.model.id) {
 			return `Enter a model for your ${label} in the transcript settings.`;

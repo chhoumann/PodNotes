@@ -363,7 +363,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 							});
 							setting.setErrorMessage(
 								value.trim() && server && !server.endpoint
-									? "The address must start with http:// or https://."
+									? "The address must start with http:// or https:// and hold no user name or password."
 									: null,
 							);
 						},

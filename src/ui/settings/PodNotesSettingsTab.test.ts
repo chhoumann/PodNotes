@@ -598,14 +598,21 @@ describe("Transcripts", () => {
 			]);
 		});
 
-		test("an address without http:// or https:// says so under the field", () => {
+		test("an address without http:// or https://, or with a user name, says so under the field", () => {
 			const { ui } = openTranscripts(transcript({ provider: "openai-compatible" }));
 			const address = textbox(ui, "Server address")!;
 			const error = () =>
 				address.closest(".setting-item")?.querySelector(".setting-item-error")?.textContent;
 
 			enter(address, "localhost:8000/v1");
-			expect(error()).toBe("The address must start with http:// or https://.");
+			expect(error()).toBe(
+				"The address must start with http:// or https:// and hold no user name or password.",
+			);
+
+			enter(address, "http://user:secret@localhost:8000/v1");
+			expect(error()).toBe(
+				"The address must start with http:// or https:// and hold no user name or password.",
+			);
 
 			enter(address, "http://localhost:8000/v1");
 			expect(error()).toBeUndefined();

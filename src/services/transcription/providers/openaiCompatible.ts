@@ -18,6 +18,8 @@ export const openaiCompatible: Provider = {
 	endpoint(address) {
 		try {
 			const url = assertFetchableUrl(address.trim(), { privateHosts: true });
+			// A key goes in its own field, and a password in the address would reach notices.
+			if (url.username || url.password) return undefined;
 			const path = url.pathname.replace(/\/+$/, "");
 			url.pathname = path.endsWith(PATH) ? path : `${path}${PATH}`;
 			return url.href;
@@ -43,11 +45,12 @@ export const openaiCompatible: Provider = {
 			headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
 			body: form,
 		});
-		return (
-			verboseJsonTimes(answer) ?? {
-				text: isPlainObject(answer) && typeof answer.text === "string" ? answer.text : "",
-			}
-		);
+		const text = isPlainObject(answer) && typeof answer.text === "string" ? answer.text : "";
+		// A timed answer with no speech stays timed, so the episode's other parts keep their times.
+		const timed =
+			isPlainObject(answer) &&
+			(Array.isArray(answer.words) || Array.isArray(answer.segments));
+		return verboseJsonTimes(answer) ?? (timed && !text.trim() ? { words: [] } : { text });
 	},
 
 	// A model without times, such as OpenAI's gpt-transcribe, refuses verbose_json with a 400
