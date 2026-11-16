@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# One run at a time, so two runs cannot both find no open issue and each open one. A newer
+# run replaces a queued one, which is harmless here: it writes the same report.
+concurrency:
+  group: model-review
+  cancel-in-progress: false
+
 jobs:
   review:
     name: Review models

@@ -403,7 +403,8 @@ The `Test`, `Documentation`, `PR Title`, `Dependency Review`, and `Platforms`
 workflows have no `concurrency` block. Do not add one: a group cancels a
 pending run when a newer run joins it, even with `cancel-in-progress: false`,
 and a cancelled run on a PR head turns its check rollup to `FAILURE`. Duplicate
-runs on one head, such as after a reopen, must all finish.
+runs on one head, such as after a reopen, must all finish. `Model review` is no
+PR check and has one, so two runs cannot each open a `model-review` issue.
 
 Recovery is for the owner. Agents never dispatch release workflows. The release
 stage accepts only the refs below, re-derives and re-verifies the release commit
