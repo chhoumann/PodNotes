@@ -7,6 +7,7 @@ import {
 	type PersistedPodNotesSettings,
 	PodNotesDataError,
 } from "./persistence/podNotesData";
+import { choseDeepgram } from "./settingsMigrations";
 import { CREDENTIAL_KINDS, CREDENTIALS, type CredentialValues } from "./types/Credentials";
 import type { Episode } from "./types/Episode";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
@@ -124,6 +125,15 @@ function portable<T extends object>(settings: T): T {
 					}
 				: feed,
 		);
+	}
+	// Versions up to 2.24.0 import this object whole and read its provider as their own
+	// speaker-label provider, so it names Deepgram exactly when the library uses Deepgram.
+	if (isPlainObject(out.transcript) && isPlainObject(out.transcript.diarization)) {
+		const provider = out.transcript.provider === "deepgram" ? "deepgram" : "openai";
+		out.transcript = {
+			...out.transcript,
+			diarization: { ...out.transcript.diarization, provider },
+		};
 	}
 	for (const key of ["queue", "favorites"]) {
 		if (key in out) out[key] = portablePlaylist(out[key]);
@@ -308,6 +318,14 @@ export function mergeImportedSettings(
 			...(imported[key] as object | undefined),
 		} as never;
 	}
+	// Only the speaker settings a file names change. The provider that versions up to
+	// 2.24.0 store beside them stays as this library stored it.
+	const { enabled, speakerTemplate } = imported.transcript?.diarization ?? {};
+	merged.transcript.diarization = {
+		...current.transcript.diarization,
+		...(enabled === undefined ? {} : { enabled }),
+		...(speakerTemplate === undefined ? {} : { speakerTemplate }),
+	};
 
 	// Converge import and startup on the same deep validators and date revival.
 	// Mark the in-memory merge as current so it cannot be mistaken for a legacy
@@ -330,13 +348,14 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 		if (!typeMatchesDefault(defaultValue, value)) continue;
 
 		if ((NESTED_KEYS as readonly string[]).includes(key)) {
-			out[key] = sanitizeNestedObject(
+			const nested = sanitizeNestedObject(
 				{
 					...(defaultValue as object),
 					...OPTIONAL_NESTED_FIELDS[key],
 				},
 				value as Record<string, unknown>,
 			);
+			out[key] = key === "transcript" ? withReleasedProvider(nested) : nested;
 		} else if (key === "favorites") {
 			// Built-in playlist objects must carry an `episodes` array; consumers
 			// iterate it without guarding. Drop the key when it's malformed so the merge falls
@@ -354,6 +373,18 @@ function sanitizeImportedSettings(source: Record<string, unknown>): Partial<IPod
 	}
 
 	return out;
+}
+
+/**
+ * A file from a version up to 2.24.0 names no transcription provider. Speaker labels with
+ * Deepgram is the one provider choice it can hold, so that carries over. Any other file
+ * leaves the library's provider as it is.
+ */
+function withReleasedProvider(transcript: Record<string, unknown>): Record<string, unknown> {
+	const { provider, diarization } = transcript;
+	return typeof provider !== "string" && isPlainObject(diarization) && choseDeepgram(diarization)
+		? { ...transcript, provider: "deepgram", model: "" }
+		: transcript;
 }
 
 function extractLegacySecrets(source: Record<string, unknown>): CredentialValues {

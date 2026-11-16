@@ -524,3 +524,78 @@ export async function removeOpenAIStub(obsidian: ObsidianClient): Promise<void> 
 		return true;
 	})()`);
 }
+
+export type ElevenLabsRequest = Readonly<{
+	method: string;
+	apiKey: string | null;
+	model: string | null;
+	diarize: string | null;
+	/** The address the request named in place of a file. */
+	sourceUrl: string | null;
+	fileBytes: number;
+	sha256: string | null;
+}>;
+
+const ELEVENLABS_URL = "https://api.elevenlabs.io/v1/speech-to-text";
+
+/** Answers ElevenLabs with `first` from one speaker at 0 s and `second` from another 12 s in. */
+export async function installElevenLabsStub(
+	obsidian: ObsidianClient,
+	first: string,
+	second: string,
+): Promise<void> {
+	await obsidian.dev.evalJsonAsync(`(async () => {
+		if (window.__podnotesJourneyElevenLabs) throw new Error("The ElevenLabs stub is already installed.");
+		const ipc = window.electron.ipcRenderer;
+		const originalSend = ipc.send;
+		const requests = [];
+		const spoken = (sentence, speaker, from) => sentence.split(" ").flatMap((text, index) => {
+			const start = from + index * 0.4;
+			const word = { text, type: "word", start, end: start + 0.3, speaker_id: speaker };
+			return index === 0 ? [word] : [{ text: " ", type: "spacing", start, end: start, speaker_id: speaker }, word];
+		});
+		const words = [...spoken(${jsLiteral(first)}, "speaker_0", 0), ...spoken(${jsLiteral(second)}, "speaker_1", 12)];
+		const answer = async (replyChannel, request) => {
+			const form = await new Response(request.body, {
+				headers: { "content-type": request.contentType ?? "" },
+			}).formData();
+			const file = form.get("file");
+			const bytes = file instanceof Blob ? new Uint8Array(await file.arrayBuffer()) : null;
+			requests.push({
+				method: (request.method ?? "GET").toUpperCase(),
+				apiKey: new Headers(request.headers).get("xi-api-key"),
+				model: form.get("model_id"),
+				diarize: form.get("diarize"),
+				sourceUrl: form.get("source_url"),
+				fileBytes: bytes?.byteLength ?? 0,
+				sha256: bytes && require("node:crypto").createHash("sha256").update(bytes).digest("hex"),
+			});
+			const body = new TextEncoder().encode(JSON.stringify({ language_code: "eng", text: ${jsLiteral(`${first} ${second}`)}, words })).buffer;
+			ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body });
+		};
+		ipc.send = function (channel, replyChannel, request, ...rest) {
+			if (channel === "request-url" && request?.url === ${jsLiteral(ELEVENLABS_URL)}) {
+				void answer(replyChannel, request);
+				return;
+			}
+			return originalSend.call(ipc, channel, replyChannel, request, ...rest);
+		};
+		window.__podnotesJourneyElevenLabs = { ipc, originalSend, requests };
+		return true;
+	})()`);
+}
+
+export async function elevenLabsRequests(obsidian: ObsidianClient): Promise<ElevenLabsRequest[]> {
+	return await obsidian.dev.evalJson<ElevenLabsRequest[]>(
+		"window.__podnotesJourneyElevenLabs.requests",
+	);
+}
+
+export async function removeElevenLabsStub(obsidian: ObsidianClient): Promise<void> {
+	await obsidian.dev.evalJson(`(() => {
+		const stub = window.__podnotesJourneyElevenLabs;
+		if (stub) stub.ipc.send = stub.originalSend;
+		delete window.__podnotesJourneyElevenLabs;
+		return true;
+	})()`);
+}

@@ -2,12 +2,12 @@
 // Network log for this worktree's Obsidian instance, with a fixture provider in
 // place of the paid transcription APIs.
 //
-//   node .claude/skills/verify/net.mjs watch     start a fresh log; answer OpenAI and Deepgram locally
+//   node .claude/skills/verify/net.mjs watch     start a fresh log; answer ElevenLabs, Deepgram and OpenAI locally
 //   node .claude/skills/verify/net.mjs log       print each request as JSON, oldest first; a path only
-//                                                for the fixture server, OpenAI and Deepgram
+//                                                for the fixture server and the three providers
 //   node .claude/skills/verify/net.mjs unwatch   restore fetch and requestUrl
 //
-// PodNotes sends its requests (feeds, audio, transcripts, OpenAI, Deepgram)
+// PodNotes sends its requests (feeds, audio, transcripts, the providers)
 // through requestUrl, which Obsidian forwards to its main process on the
 // `request-url` IPC channel. The fetch log catches anything that bypasses it.
 import { fileURLToPath } from "node:url";
@@ -33,7 +33,7 @@ const instance = resolveInstanceOptions(
 const CALL_TIMEOUT_MS = 15000;
 const FIXTURE_TRANSCRIPTION = "This text came from the fixture provider.";
 const FIXTURE_REPLY = "A second speaker answers.";
-const PATH_HOSTS = [FIXTURE_HOST, "api.openai.com", "api.deepgram.com"];
+const PATH_HOSTS = [FIXTURE_HOST, "api.elevenlabs.io", "api.deepgram.com", "api.openai.com"];
 
 /** @param {string} code */
 async function evaluate(code) {
@@ -84,7 +84,20 @@ const WATCH = `(() => {
 		end: from + index * 0.4 + 0.3,
 		speaker,
 	}));
-	const deepgram = { results: { channels: [{ alternatives: [{ words: [...words(text, 0, 0), ...words(${jsLiteral(FIXTURE_REPLY)}, 1, 12)] }] }] } };
+	const reply = ${jsLiteral(FIXTURE_REPLY)};
+	const deepgram = { results: { channels: [{ alternatives: [{ words: [...words(text, 0, 0), ...words(reply, 1, 12)] }] }] } };
+	// ElevenLabs' words, at the same times, with a spacing item between each two.
+	const scribeWords = (sentence, speaker, from) => words(sentence, speaker, from).flatMap(({ punctuated_word, start, end }, index) => {
+		const word = { text: punctuated_word, type: "word", start, end, speaker_id: "speaker_" + speaker };
+		return index === 0 ? [word] : [{ text: " ", type: "spacing", start, end: start, speaker_id: word.speaker_id }, word];
+	});
+	const elevenlabs = { language_code: "eng", text: text + " " + reply, words: [...scribeWords(text, 0, 0), ...scribeWords(reply, 1, 12)] };
+	// A multipart request that names an address in place of a file is a few hundred bytes.
+	const namedAddress = (request) => {
+		if (!(request.body?.byteLength < 4096)) return undefined;
+		const match = /name="source_url"\\r\\n\\r\\n([^\\r]+)/.exec(new TextDecoder().decode(request.body));
+		return match ? logged(match[1]) : undefined;
+	};
 	const originalFetch = window.fetch;
 	window.fetch = async function (input, init) {
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -101,9 +114,11 @@ const WATCH = `(() => {
 				? { text }
 				: request.url.startsWith("https://api.deepgram.com/")
 					? deepgram
-					: null;
+					: request.url.startsWith("https://api.elevenlabs.io/")
+						? elevenlabs
+						: null;
 			if (answer) {
-				entries.push({ via: "requestUrl", method, url: logged(request.url), answeredBy: "fixture provider", contentType: request.contentType, uploadBytes: request.body?.byteLength ?? 0 });
+				entries.push({ via: "requestUrl", method, url: logged(request.url), answeredBy: "fixture provider", contentType: request.contentType, uploadBytes: request.body?.byteLength ?? 0, sourceUrl: namedAddress(request) });
 				const body = new TextEncoder().encode(JSON.stringify(answer)).buffer;
 				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body }));
 				return;

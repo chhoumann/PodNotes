@@ -71,8 +71,13 @@ export function createMockPlugin(
 	overrides: {
 		openAIKey?: string;
 		deepgramKey?: string;
-		/** Speaker labels are on, with this provider. */
-		speakers?: "openai" | "deepgram";
+		elevenLabsKey?: string;
+		/** The stored provider ID. OpenAI when left out. */
+		provider?: string;
+		/** The stored model ID. The recommended model when left out. */
+		model?: string;
+		/** The settings ask for speaker labels. */
+		speakers?: boolean;
 		/** In place of a repository with no saved feed. */
 		feeds?: FeedRepository;
 		podcast?: Episode | null;
@@ -85,7 +90,10 @@ export function createMockPlugin(
 	const {
 		openAIKey = "test-api-key",
 		deepgramKey = "",
-		speakers,
+		elevenLabsKey = "",
+		provider = "openai",
+		model = "",
+		speakers = false,
 		feeds,
 		podcast = mockEpisode,
 		existingTranscriptPath = null,
@@ -96,21 +104,24 @@ export function createMockPlugin(
 
 	const existing = (path: string) =>
 		path === existingTranscriptPath ? Object.assign(new TFile(), { path }) : null;
-	const keys: Record<CredentialKind, string> = { openai: openAIKey, deepgram: deepgramKey };
+	const keys: Record<CredentialKind, string> = {
+		openai: openAIKey,
+		deepgram: deepgramKey,
+		elevenlabs: elevenLabsKey,
+	};
 
 	return {
 		settings: {
 			openAISecretId: openAIKey ? "openai-secret" : "",
 			deepgramSecretId: "",
+			elevenLabsSecretId: "",
 			timestamp: { template: "- {{linktime}} ", offset: 5 },
 			transcript: {
 				path: "Transcripts/{{podcast}}/{{title}}.md",
 				template: "# {{title}}\n\n{{transcript}}",
-				diarization: {
-					enabled: speakers !== undefined,
-					provider: speakers ?? "openai",
-					speakerTemplate: "",
-				},
+				provider,
+				model,
+				diarization: { enabled: speakers, speakerTemplate: "" },
 			},
 			download: {
 				path: "Downloads",

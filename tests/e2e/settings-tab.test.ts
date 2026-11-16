@@ -88,16 +88,6 @@ describe("PodNotes settings tab", () => {
 		const { obsidian } = getContext();
 		await openPodNotesSettings(obsidian);
 		onTestFinished(() => closeSettings(obsidian));
-		// The diarization rows take focus only while diarization is on, and the Deepgram key
-		// only with Deepgram, the provider after OpenAI.
-		if ((await settingValue(obsidian, "Speaker diarization")) !== true) {
-			await click(obsidian, ui.settingControl("Speaker diarization", ".checkbox-container"));
-		}
-		const provider = `(${ui.settingControl("Diarization provider", "select").elements})[0]`;
-		if ((await obsidian.dev.evalJson<string>(`${provider}.value`)) !== "deepgram") {
-			await obsidian.dev.evalJson(`${provider}.focus(), true`);
-			await pressKey(obsidian, "ArrowDown");
-		}
 		await click(obsidian, ui.settingControl("Skip back (s)", "input"));
 		const fields: Field[] = [];
 		for (let presses = 0; presses < 60 && fields.at(-1)?.row !== "Export settings"; presses++) {
@@ -119,13 +109,13 @@ describe("PodNotes settings tab", () => {
 			"Episode note template",
 			"Podcast note path",
 			"Podcast note template",
-			"OpenAI API key",
+			"Transcription provider",
+			"ElevenLabs API key",
+			"Model",
+			"Speaker labels",
+			"Speaker label format",
 			"Transcript path",
 			"Transcript template",
-			"Speaker diarization",
-			"Diarization provider",
-			"Deepgram API key",
-			"Speaker label format",
 			"Download path",
 			"Export OPML",
 			"Latest episodes per podcast",
@@ -137,7 +127,7 @@ describe("PodNotes settings tab", () => {
 		expect(
 			fields.filter(({ row, name, from }) => name !== row || from !== "aria-labelledby"),
 		).toEqual(
-			["OpenAI API key", "Deepgram API key"].map((row) => ({
+			["ElevenLabs API key"].map((row) => ({
 				row,
 				name: expect.stringMatching(new RegExp(`^(Link\\.\\.\\.|Change) ${row}$`)),
 				from: "aria-labelledby",
@@ -169,7 +159,7 @@ describe("PodNotes settings tab", () => {
 			"Skip back",
 			"headset",
 			"Timestamp template",
-			"Deepgram",
+			"Transcription provider",
 			"Download path",
 			"OPML",
 			"Include API keys",
@@ -180,7 +170,7 @@ describe("PodNotes settings tab", () => {
 			"Skip back": expect.arrayContaining(["Skip back (s)"]),
 			headset: expect.arrayContaining(["Previous track", "Next track"]),
 			"Timestamp template": expect.arrayContaining(["Timestamp template"]),
-			Deepgram: expect.arrayContaining(["Deepgram API key"]),
+			"Transcription provider": expect.arrayContaining(["Transcription provider"]),
 			"Download path": expect.arrayContaining(["Download path"]),
 			OPML: expect.arrayContaining(["Import OPML", "Export OPML"]),
 			"Include API keys": expect.arrayContaining(["Include API keys"]),
@@ -191,6 +181,8 @@ describe("PodNotes settings tab", () => {
 			"Cache podcast feeds",
 			"Cache duration",
 			"Clear cached feeds",
+			"Speaker diarization",
+			"Diarization provider",
 		];
 		for (const name of removed) {
 			await typeInto(obsidian, ui.settingsSearch, name, { replace: true });

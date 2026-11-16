@@ -45,10 +45,21 @@ all users. The 1,500,000-byte document goal remains advisory.
 
 # Released data.json fixtures
 
-`released-2.20.0.json` and `released-2.21.1.json` are data.json files that the
-2.20.0 and 2.21.1 sources encoded. Each tag's own `DEFAULT_SETTINGS` and
-`encodePodNotesData` produced it from one private subscription, whose URL is a
-placeholder with a `podnotes-feed-url-<uuid>` reference, and one of its
-episodes in the current episode, the queue, favorites, and history. The
-compatibility test loads them with the current code and requires them to stay
-unchanged.
+`released-2.20.0.json`, `released-2.21.1.json` and `released-2.24.0.json` are
+data.json files that the 2.20.0, 2.21.1 and 2.24.0 sources encoded. Each tag's
+own `DEFAULT_SETTINGS` and `encodePodNotesData` produced it from one private
+subscription, whose URL is a placeholder with a `podnotes-feed-url-<uuid>`
+reference, and one of its episodes in the current episode, the queue,
+favorites, and history. The compatibility test loads them with the current
+code and requires them to stay unchanged.
+
+`released-2.24.0-export.json` is the settings export that 2.24.0's
+`serializeSettings` wrote for that library with speaker labels on with
+Deepgram and its API key included.
+
+2.24.0 is the last version that keeps its transcription provider in
+`transcript.diarization.provider`. Its settings tab changes only
+`transcript.diarization.enabled`, `transcript.diarization.provider` and the two
+`SecretId` fields, so the migration tests build each released state by setting
+those fields on `released-2.24.0.json`. The 2.24.0 encoder gives the same
+documents.

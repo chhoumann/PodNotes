@@ -26,13 +26,15 @@ function failedPartMarker(index: number): string {
  * The episode's transcript from its parts in order, or undefined when no part holds speech.
  * Words become one cue each, timed from the start of the episode, and the renderer folds
  * them into paragraphs as it does for a published word-level transcript. Text from a model
- * that returns no times becomes untimed paragraphs.
+ * that returns no times becomes untimed paragraphs. Without `speakers` no cue names one,
+ * whatever the provider answered.
  */
 export function transcriptFromParts(
 	parts: readonly TranscribedPart[],
+	speakers: boolean,
 ): ParsedTranscript | undefined {
 	if (!parts.some(({ transcript }) => transcript && textOf(transcript).trim())) return undefined;
-	if (isTimed(parts)) return timed(cuesOf(parts));
+	if (isTimed(parts)) return timed(cuesOf(parts, speakers));
 	const text = parts.map(({ transcript }, index) =>
 		transcript ? textOf(transcript) : failedPartMarker(index),
 	);
@@ -50,7 +52,7 @@ function isTimed(parts: readonly TranscribedPart[]): parts is readonly TimedPart
 }
 
 /** Speakers are numbered in the order they first speak. A provider's label names a speaker only within its own part. */
-function cuesOf(parts: readonly TimedPart[]): TranscriptCue[] {
+function cuesOf(parts: readonly TimedPart[], speakers: boolean): TranscriptCue[] {
 	const numbers = new Map<string, string>();
 	const numberOf = (label: string) => {
 		const number = numbers.get(label) ?? `${numbers.size + 1}`;
@@ -63,9 +65,9 @@ function cuesOf(parts: readonly TimedPart[]): TranscriptCue[] {
 					start: start + word.start,
 					end: start + word.end,
 					speaker:
-						word.speaker === undefined
-							? undefined
-							: numberOf(`${index}:${word.speaker}`),
+						speakers && word.speaker !== undefined
+							? numberOf(`${index}:${word.speaker}`)
+							: undefined,
 					text: word.text,
 				}))
 			: [{ start, text: failedPartMarker(index) }],

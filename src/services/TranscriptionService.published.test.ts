@@ -71,7 +71,12 @@ describe("published transcripts", () => {
 			.waitFor(() => expect(timerMessages()).toContain(message))
 			.finally(() => service.dispose());
 
-	const deepgram = { openAIKey: "", deepgramKey: "deepgram-key", speakers: "deepgram" } as const;
+	const deepgram = {
+		openAIKey: "",
+		deepgramKey: "deepgram-key",
+		provider: "deepgram",
+		speakers: true,
+	} as const;
 
 	test("with no API key, the feed's VTT becomes the note with no audio and no provider", async () => {
 		fetchTextMock.mockResolvedValue(VTT);

@@ -51,7 +51,8 @@ export type LibrarySeed = Readonly<{
 		duration: number;
 		finished: boolean;
 	}>;
-	openAISecretId?: string;
+	/** The provider the library transcribes with, and the SecretStorage ID of its key. */
+	transcription?: Readonly<{ provider: "openai" | "elevenlabs"; secretId: string }>;
 	transcriptTemplate?: string;
 	noteTemplate?: string;
 }>;
@@ -332,7 +333,11 @@ export async function seedLibrary(
 				},
 			]),
 		);
-		if (seed.openAISecretId) data.openAISecretId = seed.openAISecretId;
+		if (seed.transcription) {
+			const { provider, secretId } = seed.transcription;
+			data.transcript.provider = provider;
+			data[provider === "openai" ? "openAISecretId" : "elevenLabsSecretId"] = secretId;
+		}
 		if (seed.transcriptTemplate) data.transcript.template = seed.transcriptTemplate;
 		if (seed.noteTemplate) data.note.template = seed.noteTemplate;
 	}, RELOAD_OPTIONS);

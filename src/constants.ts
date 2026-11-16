@@ -158,12 +158,14 @@ export const DEFAULT_SETTINGS: IPodNotesSettings = {
 	},
 	openAISecretId: "",
 	deepgramSecretId: "",
+	elevenLabsSecretId: "",
 	transcript: {
 		path: "transcripts/{{podcast}}/{{title}}.md",
 		template: "# {{title}}\n\nPodcast: {{podcast}}\nDate: {{date}}\n\n{{transcript}}",
+		provider: "elevenlabs",
+		model: "",
 		diarization: {
-			enabled: false,
-			provider: "openai",
+			enabled: true,
 			speakerTemplate: "**{{speaker}}:** ",
 		},
 	},

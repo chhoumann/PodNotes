@@ -6,6 +6,8 @@ import type { FailureKind } from "../http";
 export interface ModelProfile {
 	/** The ID the provider's API takes. */
 	readonly id: string;
+	/** The name the settings show. */
+	readonly label: string;
 	/** Labels who spoke. */
 	readonly speakers: boolean;
 	/** Fetches a public address itself, so PodNotes uploads nothing. */
@@ -33,6 +35,8 @@ export type AudioInput = { readonly url: PublicAudioUrl } | { readonly file: Fil
 export interface PartInput {
 	readonly apiKey: string;
 	readonly model: ModelProfile;
+	/** Label who spoke. Only ever true for a model whose profile says `speakers`. */
+	readonly speakers: boolean;
 	/** A `url` only for a model whose profile says `url`. */
 	readonly audio: AudioInput;
 }
@@ -49,9 +53,7 @@ export type Send = (request: ProviderRequest) => Promise<unknown>;
 
 /** Everything that is one provider's own: its models, its request and how to read its answers. */
 export interface Provider {
-	/** The name notices and buttons show. */
-	readonly label: string;
-	/** Best first. The first is the one PodNotes uses. */
+	/** Best first. The first is the one PodNotes recommends. */
 	readonly models: NonEmpty<ModelProfile>;
 	/** How long PodNotes waits for one answer. */
 	readonly timeoutMs: number;

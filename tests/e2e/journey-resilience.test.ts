@@ -35,15 +35,18 @@ import {
 } from "./journey/wait";
 import {
 	deepgramRequests,
+	elevenLabsRequests,
 	type FixtureEpisode,
 	type FixtureFeed,
 	type FixtureServer,
 	installDeepgramTripwire,
+	installElevenLabsStub,
 	installItunesStub,
 	installOpenAIStub,
 	itunesSearchTerms,
 	pubDate,
 	removeDeepgramTripwire,
+	removeElevenLabsStub,
 	removeItunesStub,
 	removeOpenAIStub,
 	startFixtureServer,
@@ -615,7 +618,7 @@ describe("resilience journeys", () => {
 		await seedLibrary(context, server, {
 			subscriptions: [show],
 			current: storedEpisode(server, show, spoken),
-			openAISecretId: secretId,
+			transcription: { provider: "openai", secretId },
 		});
 		await installOpenAIStub(
 			obsidian,
@@ -694,6 +697,8 @@ describe("resilience journeys", () => {
 		onTestFinished(() => removeOpenAIStub(obsidian));
 		await installDeepgramTripwire(obsidian);
 		onTestFinished(() => removeDeepgramTripwire(obsidian));
+		await installElevenLabsStub(obsidian, "ElevenLabs must not be called.", "Nor answer.");
+		onTestFinished(() => removeElevenLabsStub(obsidian));
 		const savedBefore = await plugin.data<Record<string, unknown>>().read();
 		const requestsBefore = server.requests().length;
 
@@ -732,6 +737,7 @@ describe("resilience journeys", () => {
 		expect(server.requests().filter((request) => request.endsWith(".wav"))).toEqual([]);
 		expect(await transcriptionUploads(obsidian)).toEqual([]);
 		expect(await deepgramRequests(obsidian)).toEqual([]);
+		expect(await elevenLabsRequests(obsidian)).toEqual([]);
 		const savedPaths = new Set(keyPaths(savedBefore));
 		expect(
 			keyPaths(await plugin.data<Record<string, unknown>>().read()).filter(
@@ -773,7 +779,7 @@ describe("resilience journeys", () => {
 		await seedLibrary(context, server, {
 			subscriptions: [show],
 			current: storedEpisode(server, show, spoken),
-			openAISecretId: secretId,
+			transcription: { provider: "openai", secretId },
 		});
 		await installOpenAIStub(obsidian, "Paid transcript opens here. It closes here.");
 		onTestFinished(() => removeOpenAIStub(obsidian));
@@ -813,6 +819,73 @@ describe("resilience journeys", () => {
 		});
 		expect(server.requests()).toContain("/missing-captions/1.wav");
 		expect(server.requests().filter((request) => request.endsWith(".vtt"))).toHaveLength(1);
+	}, 60_000);
+
+	test("J-TR-08 transcribing a public episode with ElevenLabs sends its address in place of its audio, and the note has timestamps and speaker labels", async () => {
+		const context = getContext();
+		const { obsidian, sandbox } = context;
+		const spoken: FixtureEpisode = { title: "Spoken Episode", seconds: 4, pubDate: pubDate(0) };
+		const show: FixtureFeed = {
+			title: "Journey ElevenLabs",
+			slug: "elevenlabs",
+			artwork: true,
+			episodes: [spoken],
+		};
+		const server = await serve(show);
+		const secretId = "podnotes-elevenlabs-api-key-454545";
+		const previousSecret = await obsidian.dev.evalJson<string | null>(
+			`app.secretStorage.getSecret(${jsLiteral(secretId)})`,
+		);
+		onTestFinished(() =>
+			obsidian.dev.evalJson(
+				previousSecret === null
+					? `app.secretStorage.deleteSecret(${jsLiteral(secretId)}), true`
+					: `app.secretStorage.setSecret(${jsLiteral(secretId)}, ${jsLiteral(previousSecret)}), true`,
+			),
+		);
+		await obsidian.dev.evalJson(
+			`app.secretStorage.setSecret(${jsLiteral(secretId)}, "sk-journey-test"), true`,
+		);
+		await seedLibrary(context, server, {
+			subscriptions: [show],
+			current: storedEpisode(server, show, spoken),
+			transcription: { provider: "elevenlabs", secretId },
+		});
+		await installElevenLabsStub(
+			obsidian,
+			"Journey transcript opens here.",
+			"A second speaker answers.",
+		);
+		onTestFinished(() => removeElevenLabsStub(obsidian));
+		const notePath = "Transcripts/Journey ElevenLabs/Spoken Episode.md";
+
+		await runCommand(obsidian, `${PLUGIN_ID}:podnotes-transcribe`);
+		await sandbox.waitForExists(notePath, { timeoutMs: 30_000 });
+
+		const link = (time: number) =>
+			`obsidian://podnotes?episodeName=Spoken%20Episode&url=${encodeURIComponent(server.feedUrl(show))}&time=${time}`;
+		expect(
+			(await readVaultText(obsidian, sandbox.path(notePath))).replace(
+				/^Date: .+$/m,
+				"Date: <date>",
+			),
+		).toBe(
+			"# Spoken Episode\n\nPodcast: Journey ElevenLabs\nDate: <date>\n\n" +
+				`[00:00:00](${link(0)}) **1:** Journey transcript opens here.\n\n` +
+				`[00:00:12](${link(12)}) **2:** A second speaker answers.`,
+		);
+		expect(await elevenLabsRequests(obsidian)).toEqual([
+			{
+				method: "POST",
+				apiKey: "sk-journey-test",
+				model: "scribe_v3",
+				diarize: "true",
+				sourceUrl: server.mediaUrl(show, spoken),
+				fileBytes: 0,
+				sha256: null,
+			},
+		]);
+		expect(server.requests().filter((request) => request.endsWith(".wav"))).toEqual([]);
 	}, 60_000);
 
 	test("J-TR-05 feed text cannot give the transcript note a block ID or an inline field", async () => {

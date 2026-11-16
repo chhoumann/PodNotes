@@ -231,7 +231,7 @@ describe("save refusal recovery", () => {
 			await observe(obsidian);
 			await outage(obsidian);
 			await obsidian.dev.evalJson("window.__pers4.blocked = false");
-			await click(obsidian, ui.settingControl("OpenAI API key", "button"));
+			await click(obsidian, ui.settingControl("ElevenLabs API key", "button"));
 			await click(obsidian, {
 				name: "Recovery secret",
 				elements:
@@ -244,8 +244,8 @@ describe("save refusal recovery", () => {
 			});
 			await obsidian.sleep(500);
 			await sample(obsidian, "key-recovered", await plugin.dataPath());
-			const savedId = (await plugin.data<PodNotesData>().read()).openAISecretId;
-			expect(savedId).toMatch(/^podnotes-openai-api-key(?:-\d+)?$/);
+			const savedId = (await plugin.data<PodNotesData>().read()).elevenLabsSecretId;
+			expect(savedId).toMatch(/^podnotes-elevenlabs-api-key(?:-\d+)?$/);
 			expect(
 				await obsidian.dev.evalJson(
 					`app.secretStorage.getSecret(${jsLiteral(savedId)}) === "sk-podnotes-e2e-recovery"`,
