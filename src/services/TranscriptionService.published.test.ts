@@ -199,6 +199,28 @@ describe("published transcripts", () => {
 		expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
 	});
 
+	test("the offer names the user's own server, without a charge", async () => {
+		fetchTextMock.mockResolvedValue("WEBVTT\n");
+		const service = new TranscriptionService(
+			createMockPlugin({
+				provider: "openai-compatible",
+				serverUrl: "http://localhost:8000/v1",
+				model: "whisper-1",
+				openAIKey: "",
+				transcripts: published,
+			}),
+		);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await service.transcribeCurrentEpisode();
+		await finished(
+			service,
+			'The published transcript could not be read. Run "Transcribe current episode from audio" to transcribe it with your OpenAI-compatible server instead.',
+		);
+
+		expect(providerMock).not.toHaveBeenCalled();
+	});
+
 	test("a failed published transcript without a key says only what failed", async () => {
 		fetchTextMock.mockRejectedValue(new NetworkError("unexpected-status", 404));
 		const plugin = createMockPlugin({ openAIKey: "", transcripts: published });

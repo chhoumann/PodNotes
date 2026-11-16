@@ -411,7 +411,13 @@ function savedByThisVersion(released: Record<string, unknown>): Record<string, u
 		headsetNextTrack: "skipForward",
 		elevenLabsSecretId: "",
 		openRouterSecretId: "",
-		transcript: { ...(released.transcript as object), provider: "elevenlabs", model: "" },
+		openAICompatibleSecretId: "",
+		transcript: {
+			...(released.transcript as object),
+			provider: "elevenlabs",
+			model: "",
+			serverUrl: "",
+		},
 	};
 	delete data.feedCache;
 	return data;

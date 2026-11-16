@@ -75,10 +75,15 @@ export function createMockPlugin(
 		deepgramKey?: string;
 		elevenLabsKey?: string;
 		openRouterKey?: string;
+		openAICompatibleKey?: string;
+		/** The SecretStorage ID the settings name for the OpenAI-compatible server's key. */
+		openAICompatibleSecretId?: string;
 		/** The stored provider ID. OpenAI when left out. */
 		provider?: string;
 		/** The stored model ID. The recommended model when left out. */
 		model?: string;
+		/** The stored server address. */
+		serverUrl?: string;
 		/** The settings ask for speaker labels. */
 		speakers?: boolean;
 		/** In place of a repository with no saved feed. */
@@ -95,8 +100,11 @@ export function createMockPlugin(
 		deepgramKey = "",
 		elevenLabsKey = "",
 		openRouterKey = "",
+		openAICompatibleKey = "",
+		openAICompatibleSecretId = openAICompatibleKey ? "openai-compatible-secret" : "",
 		provider = "openai",
 		model = "",
+		serverUrl = "",
 		speakers = false,
 		feeds,
 		podcast = mockEpisode,
@@ -113,6 +121,14 @@ export function createMockPlugin(
 		deepgram: deepgramKey,
 		elevenlabs: elevenLabsKey,
 		openrouter: openRouterKey,
+		"openai-compatible": openAICompatibleKey,
+	};
+	const secretIds: Record<CredentialKind, string> = {
+		openai: openAIKey ? "openai-secret" : "",
+		deepgram: "",
+		elevenlabs: "",
+		openrouter: "",
+		"openai-compatible": openAICompatibleSecretId,
 	};
 
 	return {
@@ -121,12 +137,14 @@ export function createMockPlugin(
 			deepgramSecretId: "",
 			elevenLabsSecretId: "",
 			openRouterSecretId: "",
+			openAICompatibleSecretId,
 			timestamp: { template: "- {{linktime}} ", offset: 5 },
 			transcript: {
 				path: "Transcripts/{{podcast}}/{{title}}.md",
 				template: "# {{title}}\n\n{{transcript}}",
 				provider,
 				model,
+				serverUrl,
 				diarization: { enabled: speakers, speakerTemplate: "" },
 			},
 			download: {
@@ -142,9 +160,10 @@ export function createMockPlugin(
 		credentials: {
 			get: vi.fn((_settings, kind: CredentialKind) => keys[kind] || null),
 			has: vi.fn((_settings, kind: CredentialKind) => Boolean(keys[kind])),
-			status: vi.fn((_settings, kind: CredentialKind) =>
-				keys[kind] ? "available" : "unconfigured",
-			),
+			status: vi.fn((_settings, kind: CredentialKind) => {
+				if (keys[kind]) return "available";
+				return secretIds[kind] ? "missing" : "unconfigured";
+			}),
 		},
 		api: {
 			podcast,

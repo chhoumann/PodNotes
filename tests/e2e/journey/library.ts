@@ -54,10 +54,11 @@ export type LibrarySeed = Readonly<{
 	}>;
 	/** The provider the library transcribes with, and the SecretStorage ID of its key. */
 	transcription?: Readonly<{
-		provider: "openai" | "elevenlabs" | "openrouter";
+		provider: "openai" | "elevenlabs" | "openrouter" | "openai-compatible";
 		secretId: string;
 		/** The recommended model when left out. */
 		model?: string;
+		serverUrl?: string;
 	}>;
 	transcriptTemplate?: string;
 	noteTemplate?: string;
@@ -340,9 +341,10 @@ export async function seedLibrary(
 			]),
 		);
 		if (seed.transcription) {
-			const { provider, secretId, model = "" } = seed.transcription;
+			const { provider, secretId, model = "", serverUrl = "" } = seed.transcription;
 			data.transcript.provider = provider;
 			data.transcript.model = model;
+			data.transcript.serverUrl = serverUrl;
 			data[CREDENTIALS[provider].settingsKey] = secretId;
 		}
 		if (seed.transcriptTemplate) data.transcript.template = seed.transcriptTemplate;

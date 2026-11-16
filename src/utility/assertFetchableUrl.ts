@@ -312,15 +312,26 @@ export class UnsafeFetchUrlError extends Error {
 	}
 }
 
+export interface TargetPolicyOptions {
+	/**
+	 * Also accepts this device and private networks. Only for an address the user typed for
+	 * a server of their own, never for one a feed, a file or a provider gave.
+	 */
+	readonly privateHosts?: boolean;
+}
+
 /**
  * Applies the synchronous target policy and returns the canonical encoded
  * HTTP(S) target. Credentials remain confined to this returned URL; failures
  * expose only a stable reason and redacted message.
  */
-export function assertFetchableUrl(rawUrl: string): URL {
+export function assertFetchableUrl(
+	rawUrl: string,
+	{ privateHosts = false }: TargetPolicyOptions = {},
+): URL {
 	const policy = parseTargetPolicy(rawUrl);
 	if (!policy.ok) throw new UnsafeFetchUrlError(policy.reason);
-	if (policy.value.hostClassification === "non-public-or-special-literal") {
+	if (!privateHosts && policy.value.hostClassification === "non-public-or-special-literal") {
 		throw new UnsafeFetchUrlError("non-public-or-special-host");
 	}
 
@@ -330,9 +341,9 @@ export function assertFetchableUrl(rawUrl: string): URL {
 }
 
 /** Non-throwing companion to {@link assertFetchableUrl}. */
-export function isFetchableUrl(rawUrl: string): boolean {
+export function isFetchableUrl(rawUrl: string, options?: TargetPolicyOptions): boolean {
 	try {
-		assertFetchableUrl(rawUrl);
+		assertFetchableUrl(rawUrl, options);
 		return true;
 	} catch {
 		return false;

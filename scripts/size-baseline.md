@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 108,180 bytes, and the raw budget 330,546. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 109,234 bytes, and the raw budget 334,091. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -88,6 +88,16 @@ words and stretches of text the words leave out keep it. With them:
 ```text
 main.js raw: 330546 bytes; budget 330546 bytes; 0 bytes remaining
 main.js gzip (level 9): 108180 bytes; budget 108180 bytes; 0 bytes remaining
+```
+
+On 2026-11-16 both rose for the OpenAI-compatible server provider: from 330,546
+raw by 3,545 bytes, and from 108,180 gzip by 1,054 bytes. That is the provider, a
+verbose_json reader shared with OpenRouter, and Whisper's word pieces joined.
+With it:
+
+```text
+main.js raw: 334091 bytes; budget 334091 bytes; 0 bytes remaining
+main.js gzip (level 9): 109234 bytes; budget 109234 bytes; 0 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.

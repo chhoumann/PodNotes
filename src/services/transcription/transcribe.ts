@@ -12,6 +12,7 @@ import { splitAudio } from "./split";
 
 export interface TranscriptionJob {
 	readonly choice: ProviderChoice;
+	/** Empty only for a `server` with no key selected. */
 	readonly apiKey: string;
 	readonly episode: Episode;
 	/** Read to tell whether the provider may be given the episode's address. */
@@ -33,6 +34,7 @@ const ENDS_THE_JOB: ReadonlySet<FailureKind> = new Set([
 	"model-unavailable",
 	"privacy",
 	"rejected",
+	"format",
 ]);
 
 /**
@@ -43,11 +45,29 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	const { choice, apiKey, episode, signal, onProgress } = job;
 	const { model } = choice;
 	const provider = PROVIDERS[choice.provider];
-	const context = { provider: choice.label, model: model.id, timeoutMs: provider.timeoutMs };
+	const endpoint = choice.server?.endpoint;
+	const context = {
+		provider: choice.label,
+		model: model.id,
+		timeoutMs: provider.timeoutMs,
+		server: endpoint ? new URL(endpoint).host : undefined,
+	};
 	const send = createSender(provider.failure, context, signal);
 	const speakers = choice.speakers && model.speakers;
-	const transcribeOne = (audio: AudioInput) =>
-		provider.transcribe({ apiKey, model, speakers, audio }, send);
+	let textOnly = false;
+	const transcribeOne = async (audio: AudioInput) => {
+		const request = () =>
+			provider.transcribe({ apiKey, model, speakers, audio, endpoint, textOnly }, send);
+		try {
+			return await request();
+		} catch (error) {
+			// A server that refuses a request for times is asked for text alone, for this part
+			// and every later one.
+			if (!(error instanceof TranscriptionError) || error.kind !== "format") throw error;
+			textOnly = true;
+			return request();
+		}
+	};
 	const progress = `Transcribing with ${choice.label}...`;
 
 	const parts: TranscribedPart[] = [];

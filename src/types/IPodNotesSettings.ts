@@ -64,8 +64,13 @@ export interface IPodNotesSettings extends CredentialReferenceSettings {
 		template: string;
 		/** The ID of the provider that transcribes audio. One this version does not have is kept as stored. */
 		provider: string;
-		/** The ID of one of the provider's models, or "" to follow the model PodNotes recommends. */
+		/**
+		 * The ID of one of the provider's models, or "" to follow the model PodNotes recommends.
+		 * For an OpenAI-compatible server, the ID the user typed, which it must have.
+		 */
 		model: string;
+		/** The address the user entered for an OpenAI-compatible server, as typed. */
+		serverUrl: string;
 		/**
 		 * `enabled` asks for speaker labels, which the chosen model may not have.
 		 * `speakerTemplate` shapes each label, where `{{speaker}}` is the speaker's name.

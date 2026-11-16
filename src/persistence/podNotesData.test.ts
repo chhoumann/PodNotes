@@ -396,6 +396,7 @@ describe("PodNotes data schema", () => {
 			template: "{{transcript}}",
 			provider: "elevenlabs",
 			model: "",
+			serverUrl: "",
 			diarization: { enabled: false, speakerTemplate: "**{{speaker}}:** " },
 		});
 		expect(decoded.settings.feedNote).toEqual({
@@ -623,7 +624,8 @@ describe("PodNotes data schema", () => {
 			libraryId: "",
 			elevenLabsSecretId: "",
 			openRouterSecretId: "",
-			transcript: { ...rest.transcript, provider: "elevenlabs", model: "" },
+			openAICompatibleSecretId: "",
+			transcript: { ...rest.transcript, provider: "elevenlabs", model: "", serverUrl: "" },
 		});
 	});
 
@@ -650,7 +652,17 @@ describe("PodNotes data schema", () => {
 			);
 		};
 		/** The root fields this version adds to a 2.24.0 library when it saves. */
-		const ADDED = { elevenLabsSecretId: "", openRouterSecretId: "" };
+		const ADDED = {
+			elevenLabsSecretId: "",
+			openRouterSecretId: "",
+			openAICompatibleSecretId: "",
+		};
+		/** The library as saved, with the root fields and the server address this version adds. */
+		const savedAs = (file: typeof released2240) => ({
+			...file,
+			...ADDED,
+			transcript: { ...file.transcript, serverUrl: "" },
+		});
 
 		it.each([
 			[
@@ -732,7 +744,7 @@ describe("PodNotes data schema", () => {
 			],
 			["no key", structuredClone(released2240)],
 		])(
-			"a save of a library with %s adds the provider, the model and empty ElevenLabs and OpenRouter key references, and changes nothing else",
+			"a save of a library with %s adds the provider, the model, an empty server address and empty ElevenLabs, OpenRouter and OpenAI-compatible server key references, and changes nothing else",
 			(_state, data) => {
 				const decoded = decodePodNotesData(structuredClone(data));
 				const { provider, model } = decoded.settings.transcript;
@@ -742,7 +754,7 @@ describe("PodNotes data schema", () => {
 				expect(file).toEqual({
 					...data,
 					...ADDED,
-					transcript: { ...data.transcript, provider, model },
+					transcript: { ...data.transcript, provider, model, serverUrl: "" },
 				});
 				expect(JSON.stringify(file.transcript.diarization)).toBe(
 					JSON.stringify(data.transcript.diarization),
@@ -765,7 +777,7 @@ describe("PodNotes data schema", () => {
 				provider: "openai",
 				model: "gpt-transcribe",
 			});
-			expect(saved(file)).toEqual({ ...file, ...ADDED });
+			expect(saved(file)).toEqual(savedAs(file));
 		});
 
 		it("a provider and a model this version does not have are kept as stored, without a repair", () => {
@@ -786,7 +798,7 @@ describe("PodNotes data schema", () => {
 			});
 			expect(decoded.warnings).toEqual([]);
 			expect(decoded.changed).toBe(false);
-			expect(saved(file)).toEqual({ ...file, ...ADDED });
+			expect(saved(file)).toEqual(savedAs(file));
 		});
 
 		it("a value 2.24.0 would have clamped in its provider field is left as found", () => {

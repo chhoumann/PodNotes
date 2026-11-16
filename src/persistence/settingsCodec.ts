@@ -233,7 +233,7 @@ function decodeTranscript(
 	const diarization = optionalRecord(record.diarization, warnings, "transcript.diarization");
 	const migrated = migrateTranscriptSettings({ ...record, diarization }, holdsOpenAIKey);
 
-	for (const key of ["path", "template", "provider", "model"]) {
+	for (const key of ["path", "template", "provider", "model", "serverUrl"]) {
 		if (record[key] !== undefined && typeof record[key] !== "string") {
 			warn(warnings, `transcript.${key}`, "expected a string");
 		}

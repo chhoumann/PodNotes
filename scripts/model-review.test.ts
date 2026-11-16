@@ -3,8 +3,9 @@ import { PROVIDERS } from "src/services/transcription/registry";
 import { curatedModels } from "./model-review.mjs";
 
 it("reads the model IDs the providers offer", () => {
+	// An OpenAI-compatible server's model is the one its user names, so it has no ID here.
 	const offered = Object.entries(PROVIDERS).flatMap(([provider, { models }]) =>
-		models.map(({ id }) => ({ provider, id })),
+		models.filter(({ id }) => id).map(({ id }) => ({ provider, id })),
 	);
 	const byProvider = (a: { provider: string }, b: { provider: string }) =>
 		a.provider.localeCompare(b.provider);

@@ -2,16 +2,8 @@ import { arrayBufferToBase64 } from "obsidian";
 import { isPlainObject } from "src/persistence/codecUtils";
 import type { NonEmpty } from "src/services/publishedTranscript/parse";
 import { fetchJsonWithTimeout } from "src/utility/networkRequest";
-import type {
-	Listing,
-	ModelProfile,
-	PartInput,
-	PartTranscript,
-	Provider,
-	ProviderRequest,
-	Segment,
-	Word,
-} from "./types";
+import type { Listing, ModelProfile, PartInput, Provider, ProviderRequest } from "./types";
+import { verboseJsonTimes } from "./verboseJson";
 
 const TRANSCRIPTIONS_URL = "https://openrouter.ai/api/v1/audio/transcriptions";
 const CATALOG_URL = "https://openrouter.ai/api/v1/models?output_modalities=transcription";
@@ -146,13 +138,13 @@ export const openrouter: Provider = {
 	async transcribe(input, send) {
 		const model = MODELS.find(({ id }) => id === input.model.id);
 		if (!model) throw new Error(`OpenRouter has no ${input.model.id} request.`);
-		return parse(
-			await send({
-				url: TRANSCRIPTIONS_URL,
-				headers: { Authorization: `Bearer ${input.apiKey}` },
-				body: await model.body(input),
-			}),
-		);
+		const answer = await send({
+			url: TRANSCRIPTIONS_URL,
+			headers: { Authorization: `Bearer ${input.apiKey}` },
+			body: await model.body(input),
+		});
+		// An answer with neither words nor segments holds no speech.
+		return verboseJsonTimes(answer) ?? { words: [] };
 	},
 
 	failure(status, body) {
@@ -185,130 +177,3 @@ export const openrouter: Provider = {
 		return listing satisfies Listing;
 	},
 };
-
-/** Words when the answer lists them, else its segments. An answer with neither holds no speech. */
-function parse(answer: unknown): PartTranscript {
-	if (!isPlainObject(answer)) return { words: [] };
-	const { words, segments } = answer;
-	if (!Array.isArray(words)) {
-		return { segments: Array.isArray(segments) ? segments.flatMap(segmentOf) : [] };
-	}
-	return {
-		words: punctuated(
-			words.flatMap((item: unknown): Word[] => {
-				// Scribe v2 also lists sounds, such as "[gentle music]", as `audio_event` items.
-				if (!isPlainObject(item) || (item.type ?? "word") !== "word") return [];
-				const { word: text, start, end, speaker } = item;
-				if (
-					typeof text !== "string" ||
-					typeof start !== "number" ||
-					typeof end !== "number"
-				) {
-					return [];
-				}
-				return [
-					{
-						text,
-						start,
-						end,
-						speaker:
-							typeof speaker === "number" || typeof speaker === "string"
-								? `${speaker}`
-								: undefined,
-					},
-				];
-			}),
-			answer.text,
-		),
-	};
-}
-
-/** Tokens a word that matches no nearby token may be found again in, where the next words follow. */
-const RESYNC_TOKENS = 200;
-
-/**
- * A word without marks: letters, combining marks and digits with apostrophes or hyphens
- * between them, as "it's" or "नमस्ते", or a number with `.,:/` between its digits, a currency sign before or `%` after,
- * as "3.5", "$5" or "5%".
- */
-const PLAIN_WORD =
-	/^(?:[\p{L}\p{M}\p{N}]+(?:['’-][\p{L}\p{M}\p{N}]+)*|[$€£¥]?\p{N}+(?:[.,:/]\p{N}+)*%?)$/u;
-/** Opening quotes and brackets a word takes from the start of its token. */
-const LEADING = /^['“"‘([¿¡「『《【（]+/u;
-/** Closing punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
-const TRAILING = /['.,?!;:…—–”"’)\]。，、？！；：」』》】）।॥]+$/u;
-
-/**
- * Qwen3 ASR lists its words without punctuation and keeps the punctuation in `text`. Words
- * are matched to the text letter by letter, so the words "re" and "running" both fall in the
- * token "re-running,". A word keeps its own text and gains only the punctuation around its
- * token: the word that starts a token takes its opening quote, and the one that ends it, its
- * closing punctuation.
- */
-function punctuated(words: Word[], text: unknown): Word[] {
-	// Marks come from the text only when no word has any, so none can be added twice. A model
-	// that marks any word punctuates its own words, and they are kept as given.
-	if (typeof text !== "string" || !words.every((word) => PLAIN_WORD.test(word.text))) {
-		return words;
-	}
-	// Chinese and Japanese put no space between sentences, so their marks end a token too.
-	const tokens = text
-		.replace(/[。，、？！；：」』》】）]+/gu, "$& ")
-		.replace(/[「『《【（]+/gu, " $&")
-		.split(/\s+/)
-		.filter(Boolean);
-	// Apostrophes count inside a word, so "we'll" is not "well", and not at its ends, where
-	// they quote it, as in "'Hello".
-	const bare = (token: string) =>
-		token
-			.toLowerCase()
-			.replace(/[^\p{L}\p{M}\p{N}']/gu, "")
-			.replace(/^'+|'+$/g, "");
-	const keys = tokens.map(bare);
-	const wordKeys = words.map((word) => bare(word.text));
-	/** Where word `w` ends when it starts at offset `o` of token `t`. */
-	const step = (w: number, t: number, o: number): [number, number] | undefined => {
-		const key = wordKeys[w];
-		if (!key || t >= keys.length || !keys[t].startsWith(key, o)) return undefined;
-		const end = o + key.length;
-		return end === keys[t].length ? [t + 1, 0] : [t, end];
-	};
-	/** Whether the two words after `w` follow on from where `w` ends. */
-	const followed = (w: number, at: [number, number]): boolean => {
-		for (let n = w + 1; n <= w + 2 && n < words.length; n++) {
-			const next = step(n, ...at);
-			if (!next) return false;
-			at = next;
-		}
-		return true;
-	};
-	let [t, o] = [0, 0];
-	return words.map((word, w) => {
-		// A word the text spells differently matches none of the next few tokens. A token past
-		// them counts only where the next two words follow, which finds the words again after a
-		// stretch of text they leave out, such as filler.
-		let start: [number, number] | undefined;
-		for (let p = t; p < Math.min(keys.length, t + 3) && !start; p++) {
-			if (step(w, p, p === t ? o : 0)) start = [p, p === t ? o : 0];
-		}
-		for (let p = t + 3; p < Math.min(keys.length, t + RESYNC_TOKENS) && !start; p++) {
-			const at = step(w, p, 0);
-			if (at && followed(w, at)) start = [p, 0];
-		}
-		const at = start && step(w, ...start);
-		if (!start || !at) return word;
-		[t, o] = at;
-		const token = tokens[start[0]];
-		const lead = start[1] === 0 ? (LEADING.exec(token)?.[0] ?? "") : "";
-		const trail = o === 0 ? (TRAILING.exec(token)?.[0] ?? "") : "";
-		return { ...word, text: lead + word.text + trail };
-	});
-}
-
-function segmentOf(item: unknown): Segment[] {
-	if (!isPlainObject(item)) return [];
-	const { text, start, end } = item;
-	return typeof text === "string" && typeof start === "number" && typeof end === "number"
-		? [{ text, start, end }]
-		: [];
-}
