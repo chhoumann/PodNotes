@@ -1804,9 +1804,9 @@ describe("TranscriptionService", () => {
 				],
 				[
 					"gives Qwen's words Chinese punctuation and dashes from its text",
-					"你好。 我们走吧！ Wait— really",
-					"你好 我们走吧 Wait really",
-					"你好。 我们走吧！ Wait— really",
+					"你好。我们走吧！「好」 Wait— really",
+					"你好 我们走吧 好 Wait really",
+					"你好。 我们走吧！ 「好」 Wait— really",
 				],
 				[
 					"does not give a Qwen contraction the punctuation of a word spelled like it without the apostrophe",

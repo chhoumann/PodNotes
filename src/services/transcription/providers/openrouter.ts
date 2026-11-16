@@ -247,7 +247,12 @@ const punctuatedAlready = ({ text }: Word): boolean =>
  */
 function punctuated(words: Word[], text: unknown): Word[] {
 	if (typeof text !== "string" || words.some(punctuatedAlready)) return words;
-	const tokens = text.split(/\s+/).filter(Boolean);
+	// Chinese and Japanese put no space between sentences, so their marks end a token too.
+	const tokens = text
+		.replace(/[。，、？！；：」』》】）]/gu, "$& ")
+		.replace(/[「『《【（]/gu, " $&")
+		.split(/\s+/)
+		.filter(Boolean);
 	// Apostrophes count inside a word, so "we'll" is not "well", and not at its ends, where
 	// they quote it, as in "'Hello".
 	const bare = (token: string) =>
