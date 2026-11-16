@@ -51,52 +51,60 @@ function wordOf(item: unknown): Word[] {
 	];
 }
 
+/** Tokens a word that matches no nearby token may be found again in, where the next words follow. */
+const RESYNC_TOKENS = 200;
+
 /**
  * Qwen3 ASR, and the servers that run it or Whisper, can list words without punctuation and
- * keep it in `text`, so each word takes its token from `text` when the two spell it alike.
+ * keep it in `text`. Words are matched to the text letter by letter, so the words "re" and
+ * "running" both fall in the token "re-running,", and the word that ends a token takes its
+ * punctuation.
  */
 function punctuated(words: Word[], text: unknown): Word[] {
 	if (typeof text !== "string" || words.some((word) => /[.,?!]/.test(word.text))) return words;
 	const tokens = text.split(/\s+/).filter(Boolean);
 	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
 	const keys = tokens.map(bare);
-	const single = firstFrom(keys);
-	const pair = firstFrom(keys.slice(1).map((key, index) => `${keys[index]} ${key}`));
-	let next = 0;
-	return words.map((word, index) => {
-		const key = bare(word.text);
-		const near = single(key, next);
-		// A word `text` spells differently, such as "re-running" listed as "re" and "running",
-		// matches no token. A token past the few after the last match counts only when the next
-		// word follows it there too, which finds the words again after any stretch they leave out.
-		const at =
-			near !== undefined && near - next < 3
-				? near
-				: index + 1 < words.length
-					? pair(`${key} ${bare(words[index + 1].text)}`, next)
-					: undefined;
-		if (at === undefined) return word;
-		next = at + 1;
-		return { ...word, text: tokens[at] };
-	});
-}
-
-/**
- * Finds the first index at or after `from` that holds a key. Each call's `from` must be at least
- * the last one's, which lets every lookup together take time linear in the keys.
- */
-function firstFrom(keys: string[]): (key: string, from: number) => number | undefined {
-	const later = new Map<string, number[]>();
-	for (let index = keys.length - 1; index >= 0; index--) {
-		const list = later.get(keys[index]);
-		if (list) list.push(index);
-		else later.set(keys[index], [index]);
-	}
-	return (key, from) => {
-		const list = later.get(key);
-		while (list && list[list.length - 1] < from) list.pop();
-		return list?.[list.length - 1];
+	const wordKeys = words.map((word) => bare(word.text));
+	/** Where word `w` ends when it starts at offset `o` of token `t`. */
+	const step = (w: number, t: number, o: number): [number, number] | undefined => {
+		const key = wordKeys[w];
+		if (!key || t >= keys.length || !keys[t].startsWith(key, o)) return undefined;
+		const end = o + key.length;
+		return end === keys[t].length ? [t + 1, 0] : [t, end];
 	};
+	/** Whether the two words after `w` follow on from where `w` ends. */
+	const followed = (w: number, at: [number, number]): boolean => {
+		for (let n = w + 1; n <= w + 2 && n < words.length; n++) {
+			const next = step(n, ...at);
+			if (!next) return false;
+			at = next;
+		}
+		return true;
+	};
+	let [t, o] = [0, 0];
+	return words.map((word, w) => {
+		// A word the text spells differently matches none of the next few tokens. A token past
+		// them counts only where the next two words follow, which finds the words again after a
+		// stretch of text they leave out, such as filler.
+		let start: [number, number] | undefined;
+		for (let p = t; p < Math.min(keys.length, t + 3) && !start; p++) {
+			if (step(w, p, p === t ? o : 0)) start = [p, p === t ? o : 0];
+		}
+		for (let p = t + 3; p < Math.min(keys.length, t + RESYNC_TOKENS) && !start; p++) {
+			const at = step(w, p, 0);
+			if (at && followed(w, at)) start = [p, 0];
+		}
+		const at = start && step(w, ...start);
+		if (!start || !at) return word;
+		[t, o] = at;
+		if (o !== 0) return word;
+		if (start[1] === 0) return { ...word, text: tokens[start[0]] };
+		return {
+			...word,
+			text: word.text + (/[^\p{L}\p{N}']+$/u.exec(tokens[start[0]])?.[0] ?? ""),
+		};
+	});
 }
 
 function segmentOf(item: unknown): Segment[] {

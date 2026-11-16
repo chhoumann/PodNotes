@@ -1718,6 +1718,70 @@ describe("TranscriptionService", () => {
 				);
 			});
 
+			test("Qwen's words split from one token of its text take its punctuation in place, not from where the pair comes again", async () => {
+				const said = "Short term challenges remain Later short term we adapt".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Short-term challenges remain. Later, short term, we adapt.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) Short term challenges remain. Later, short term, we adapt.`,
+				);
+			});
+
+			test("the last of the Qwen words split from one token of its text takes that token's punctuation", async () => {
+				const said = "It was short term Then we left".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "It was short-term. Then we left.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) It was short term. Then we left.`,
+				);
+			});
+
+			test("a Qwen word its text says differently is not matched to a later token the next words do not follow", async () => {
+				// The words say "And" where the text says "So", and "And" comes later, before "so".
+				const said = "Right And the answer is yes And so the answer is no".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Right. So the answer is yes. And so, the answer is no.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) Right. And the answer is yes. And so, the answer is no.`,
+				);
+			});
+
 			test("Voxtral's segments from two parts of at most 900 s become paragraphs timed from the episode's start", async () => {
 				const stream = MP3_STREAMS.mpeg25At8Kbps;
 				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
