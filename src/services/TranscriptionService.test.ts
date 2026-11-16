@@ -1834,9 +1834,9 @@ describe("TranscriptionService", () => {
 				],
 				[
 					"adds no second mark to a Qwen word that has one beside an emoji",
-					"“Hi there. Hello… Next! 你好。 我们走吧！！",
-					"“🙂Hi there Hello…🙂 Next 你好。🙂 我们走吧",
-					"“🙂Hi there. Hello…🙂 Next! 你好。🙂 我们走吧！！",
+					'“Hi there. Hello… Next! 你好。 我们走吧！！ "1️⃣Go now" "ℹ️Info here"',
+					'“🙂Hi there Hello…🙂 Next 你好。🙂 我们走吧 1️⃣"Go now ℹ️"Info here',
+					'“🙂Hi there. Hello…🙂 Next! 你好。🙂 我们走吧！！ 1️⃣"Go now" ℹ️"Info here"',
 				],
 				[
 					"adds nothing to Qwen's words when one already has punctuation before an emoji",
