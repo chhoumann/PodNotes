@@ -1814,6 +1814,12 @@ describe("TranscriptionService", () => {
 					"「你好。」 我们走吧！！",
 				],
 				[
+					"restores punctuation to Qwen's words with combining marks, as in Hindi",
+					"Un cafe\u0301, merci. नमस्ते दुनिया। फिर मिलेंगे?",
+					"Un cafe\u0301 merci नमस्ते दुनिया फिर मिलेंगे",
+					"Un cafe\u0301, merci. नमस्ते दुनिया। फिर मिलेंगे?",
+				],
+				[
 					"does not give a Qwen contraction the punctuation of a word spelled like it without the apostrophe",
 					"Well, we'll see. Okay.",
 					"we'll see Okay",

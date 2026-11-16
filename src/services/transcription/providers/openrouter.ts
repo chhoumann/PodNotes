@@ -227,15 +227,16 @@ function parse(answer: unknown): PartTranscript {
 const RESYNC_TOKENS = 200;
 
 /**
- * A word without marks: letters and digits with apostrophes or hyphens between them, as
- * "it's", or a number with `.,:/` between its digits, a currency sign before or `%` after,
+ * A word without marks: letters, combining marks and digits with apostrophes or hyphens
+ * between them, as "it's" or "नमस्ते", or a number with `.,:/` between its digits, a currency sign before or `%` after,
  * as "3.5", "$5" or "5%".
  */
-const PLAIN_WORD = /^(?:[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*|[$€£¥]?\p{N}+(?:[.,:/]\p{N}+)*%?)$/u;
+const PLAIN_WORD =
+	/^(?:[\p{L}\p{M}\p{N}]+(?:['’-][\p{L}\p{M}\p{N}]+)*|[$€£¥]?\p{N}+(?:[.,:/]\p{N}+)*%?)$/u;
 /** Opening quotes and brackets a word takes from the start of its token. */
 const LEADING = /^['“"‘([¿¡「『《【（]+/u;
 /** Closing punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
-const TRAILING = /['.,?!;:…—–”"’)\]。，、？！；：」』》】）]+$/u;
+const TRAILING = /['.,?!;:…—–”"’)\]。，、？！；：」』》】）।॥]+$/u;
 
 /**
  * Qwen3 ASR lists its words without punctuation and keeps the punctuation in `text`. Words
@@ -261,7 +262,7 @@ function punctuated(words: Word[], text: unknown): Word[] {
 	const bare = (token: string) =>
 		token
 			.toLowerCase()
-			.replace(/[^\p{L}\p{N}']/gu, "")
+			.replace(/[^\p{L}\p{M}\p{N}']/gu, "")
 			.replace(/^'+|'+$/g, "");
 	const keys = tokens.map(bare);
 	const wordKeys = words.map((word) => bare(word.text));
