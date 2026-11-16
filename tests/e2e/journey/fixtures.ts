@@ -461,6 +461,7 @@ export type TranscriptionUpload = Readonly<{
 	method: string;
 	authorization: string | null;
 	model: string | null;
+	responseFormat: string | null;
 	fileName: string | null;
 	fileBytes: number;
 	riffWave: boolean;
@@ -486,6 +487,7 @@ export async function installOpenAIStub(obsidian: ObsidianClient, text: string):
 				method: (request.method ?? "GET").toUpperCase(),
 				authorization: new Headers(request.headers).get("authorization"),
 				model: form.get("model"),
+				responseFormat: form.get("response_format"),
 				fileName: file instanceof File ? file.name : null,
 				fileBytes: bytes.byteLength,
 				riffWave: ascii(0, 4) === "RIFF" && ascii(8, 12) === "WAVE",

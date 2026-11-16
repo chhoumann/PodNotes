@@ -1,5 +1,4 @@
 import { DEFAULT_SETTINGS } from "./constants";
-import { DIARIZATION_PROVIDERS, type DiarizationProviderId } from "./services/diarization/types";
 import type { IPodNotesSettings } from "./types/IPodNotesSettings";
 
 /**
@@ -138,9 +137,11 @@ export function migrateTranscriptSettings(
 	};
 }
 
-function sanitizeDiarizationProvider(value: unknown): DiarizationProviderId {
-	return DIARIZATION_PROVIDERS.includes(value as DiarizationProviderId)
-		? (value as DiarizationProviderId)
+function sanitizeDiarizationProvider(
+	value: unknown,
+): IPodNotesSettings["transcript"]["diarization"]["provider"] {
+	return value === "openai" || value === "deepgram"
+		? value
 		: DEFAULT_SETTINGS.transcript.diarization.provider;
 }
 

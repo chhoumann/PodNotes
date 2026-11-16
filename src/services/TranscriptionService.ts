@@ -1,6 +1,5 @@
 import { Notice, TFile, type Vault } from "obsidian";
 import type PodNotes from "../main";
-import { getEpisodeAudioBuffer } from "../downloadEpisode";
 import { FilePathTemplateEngine, TranscriptTemplateEngine } from "../TemplateEngine";
 import { enforceMaxPathLength, lastSegmentExtension } from "../utility/enforceMaxPathLength";
 import { ensureFolderExists } from "../utility/ensureFolderExists";
@@ -9,26 +8,16 @@ import type { Episode } from "src/types/Episode";
 import type { IPodNotesSettings } from "src/types/IPodNotesSettings";
 import { openNote } from "src/ui/openNote";
 import { TimerNotice } from "src/ui/TimerNotice";
-import { createChunkFiles, getMimeType } from "./audioChunker";
-import { canRetry, createTranscription, retryDelayMs } from "./openaiTranscription";
-import {
-	type DiarizationAudio,
-	type DiarizationProviderId,
-	type DiarizedSegment,
-	diarizeWithDeepgram,
-	diarizeWithOpenAI,
-	OPENAI_DIARIZE_PART_SECONDS,
-	renderDiarizedTranscript,
-	requiredTranscriptionKeyPresent,
-} from "./diarization";
 import {
 	fetchPublishedTranscript,
 	findPublishedTranscript,
+	type ParsedTranscript,
 	type PublishedTranscript,
 	PublishedTranscriptError,
 	renderTranscriptBody,
 	timestampStyle,
 } from "./publishedTranscript";
+import { transcribe, transcriptionChoice } from "./transcription";
 
 export const TRANSCRIBE_FROM_AUDIO_COMMAND = "Transcribe current episode from audio";
 
@@ -52,17 +41,7 @@ export function transcriptNote(
 	return vault.getFileByPath(transcriptPath(settings, episode));
 }
 
-// A chunk that exhausts its retries leaves this placeholder in its transcript
-// slot; the pattern matches it so buildTranscriptBody can tell real speech apart
-// from a body made only of error markers. Keep the builder and matcher in sync.
-function chunkErrorPlaceholder(index: number): string {
-	return `[Error transcribing chunk ${index}]`;
-}
-const CHUNK_ERROR_PLACEHOLDER_PATTERN = /\[Error transcribing chunk \d+\]/g;
-
-const MAX_RETRIES = 3;
 const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
-const MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS = 3;
 
 function queueKey(episode: Episode): string {
 	return `${episode.podcastName}:${episode.title}`;
@@ -73,6 +52,15 @@ interface TranscriptionJob {
 	readonly source:
 		| { readonly kind: "published"; readonly transcript: PublishedTranscript }
 		| { readonly kind: "audio" };
+}
+
+interface Outcome {
+	/** Fills the template's `{{transcript}}` tag. */
+	readonly body: string;
+	/** What the notice says once the note is saved. */
+	readonly completion: string;
+	/** The note is not all that was asked for, and `completion` says why. */
+	readonly warns: boolean;
 }
 
 export class TranscriptionService {
@@ -133,27 +121,17 @@ export class TranscriptionService {
 	}
 
 	private hasRequiredKey(): boolean {
-		return requiredTranscriptionKeyPresent(this.plugin.settings, (kind) =>
-			this.plugin.credentials.has(this.plugin.settings, kind),
-		);
-	}
-
-	private needsDeepgram(): boolean {
-		const diarization = this.plugin.settings.transcript.diarization;
-		return Boolean(diarization?.enabled && diarization.provider === "deepgram");
+		const { settings, credentials } = this.plugin;
+		return credentials.has(settings, transcriptionChoice(settings).provider);
 	}
 
 	private noticeMissingKey(): void {
-		const needsDeepgram = this.needsDeepgram();
-		const kind = needsDeepgram ? "deepgram" : "openai";
-		const unavailableOnDevice =
-			this.plugin.credentials.status(this.plugin.settings, kind) === "missing";
+		const { settings, credentials } = this.plugin;
+		const { provider, label } = transcriptionChoice(settings);
 		new Notice(
-			unavailableOnDevice
-				? `The selected ${needsDeepgram ? "Deepgram" : "OpenAI"} API key is not available on this device. Select or create it in the transcript settings.`
-				: needsDeepgram
-					? "Select or create a Deepgram API key in the transcript settings on this device."
-					: "Select or create an OpenAI API key in the transcript settings on this device.",
+			credentials.status(settings, provider) === "missing"
+				? `The selected ${label} API key is not available on this device. Select or create it in the transcript settings.`
+				: `Select or create ${/^[AEIOU]/.test(label) ? "an" : "a"} ${label} API key in the transcript settings on this device.`,
 		);
 	}
 
@@ -210,27 +188,31 @@ export class TranscriptionService {
 		const updateNotice = (message: string) => {
 			if (!this.disposed) notice.update(message);
 		};
+		// A failure, or a note saved with a warning, asks for an action, so it stays until clicked.
+		let lasting = true;
 
 		try {
 			const existing = transcriptNote(this.plugin.app.vault, this.plugin.settings, episode);
 			if (existing) {
 				notice.stop();
+				lasting = false;
 				updateNotice(`Transcript already exists - skipped (${existing.path}).`);
 				return;
 			}
 
-			const { body, completion } =
+			const outcome =
 				source.kind === "published"
 					? await this.readPublishedTranscript(episode, source.transcript, updateNotice)
 					: await this.transcribeAudio(episode, updateNotice);
 			this.assertActive();
 
 			updateNotice("Saving transcription...");
-			await this.saveTranscription(episode, body);
+			await this.saveTranscription(episode, outcome.body);
 			this.assertActive();
 
 			notice.stop();
-			updateNotice(completion);
+			lasting = outcome.warns;
+			updateNotice(outcome.completion);
 		} catch (error) {
 			if (this.disposed || this.signal.aborted) return;
 			console.error("Transcription error:", error);
@@ -245,7 +227,7 @@ export class TranscriptionService {
 			if (this.disposed) {
 				notice.dispose();
 				this.activeNotices.delete(notice);
-			} else {
+			} else if (!lasting) {
 				notice.scheduleHide(5000, () => this.activeNotices.delete(notice));
 			}
 		}
@@ -255,247 +237,56 @@ export class TranscriptionService {
 		episode: Episode,
 		transcript: PublishedTranscript,
 		updateNotice: (message: string) => void,
-	): Promise<{ body: string; completion: string }> {
+	): Promise<Outcome> {
 		updateNotice("Fetching the published transcript...");
 		const parsed = await this.waitForLifecycle(
 			fetchPublishedTranscript(this.plugin.feeds, episode, transcript, this.signal),
 		);
-		const { timestamp, transcript: settings } = this.plugin.settings;
-		const body = renderTranscriptBody(parsed, {
-			episode,
-			speakerTemplate: settings.diarization?.speakerTemplate ?? "",
-			timestamp: timestampStyle(timestamp.template),
-		});
-		return { body, completion: "Saved the transcript the feed publishes." };
+		return {
+			body: this.renderBody(episode, parsed),
+			completion: "Saved the transcript the feed publishes.",
+			warns: false,
+		};
 	}
 
 	private async transcribeAudio(
 		episode: Episode,
 		updateNotice: (message: string) => void,
-	): Promise<{ body: string; completion: string }> {
-		updateNotice("Fetching episode audio...");
-		const { buffer, extension, basename } = await this.waitForLifecycle(
-			getEpisodeAudioBuffer(episode),
+	): Promise<Outcome> {
+		const { settings, credentials, feeds } = this.plugin;
+		const choice = transcriptionChoice(settings);
+		const apiKey = credentials.get(settings, choice.provider);
+		if (!apiKey) throw new Error(`Missing ${choice.label} API key on this device.`);
+		const { content, warnings } = await this.waitForLifecycle(
+			transcribe({
+				choice,
+				apiKey,
+				episode,
+				feeds,
+				signal: this.signal,
+				onProgress: updateNotice,
+			}),
 		);
-		this.assertActive();
-		const { body, warning } = await this.buildTranscriptBody(
-			{ buffer, mimeType: getMimeType(extension), extension, basename },
-			updateNotice,
-		);
-		return { body, completion: warning ?? "Transcription completed and saved." };
+		return {
+			body: this.renderBody(episode, content),
+			completion: warnings.join(" ") || "Transcription completed and saved.",
+			warns: warnings.length > 0,
+		};
+	}
+
+	private renderBody(episode: Episode, transcript: ParsedTranscript): string {
+		const { timestamp, transcript: settings } = this.plugin.settings;
+		return renderTranscriptBody(transcript, {
+			episode,
+			speakerTemplate: settings.diarization.speakerTemplate,
+			timestamp: timestampStyle(timestamp.template),
+		});
 	}
 
 	private publishedTranscriptFailure(error: PublishedTranscriptError): string {
 		if (!this.hasRequiredKey()) return error.message;
-		const provider = this.needsDeepgram() ? "Deepgram" : "OpenAI";
-		return `${error.message} Run "${TRANSCRIBE_FROM_AUDIO_COMMAND}" to transcribe it with ${provider} instead, which uses your API credit.`;
-	}
-
-	/**
-	 * Produce the transcript body that fills the template's `{{transcript}}` tag.
-	 * Plain Whisper returns one run-on block, so it is reflowed after sentence
-	 * periods for readability; diarization returns speaker-labeled turns already
-	 * separated into paragraphs, so it is rendered as-is. Either path yielding no
-	 * speech is treated as a failure rather than writing an empty transcript (empty
-	 * Whisper chunks join to whitespace, so the body is trimmed before the check).
-	 *
-	 * A chunk that exhausts its retries leaves an `[Error transcribing chunk N]`
-	 * placeholder in its slot. If stripping those placeholders leaves no real text -
-	 * every chunk failed, or the only successes were empty - we throw, so no file is
-	 * written and the episode stays retryable instead of saving a "transcript" made
-	 * only of error markers that the existence check would then refuse to re-run
-	 * (mirrors the diarization provider's all-chunks-failed contract). When some
-	 * chunks fail but real speech remains we keep the otherwise-good transcript and
-	 * return a `warning` so the run is reported as partial, not a clean success.
-	 */
-	private async buildTranscriptBody(
-		audio: DiarizationAudio,
-		updateNotice: (message: string) => void,
-	): Promise<{ body: string; warning?: string }> {
-		const diarization = this.plugin.settings.transcript.diarization;
-
-		if (diarization?.enabled) {
-			const segments = await this.diarize(audio, diarization.provider, updateNotice);
-			this.assertActive();
-			if (segments.length === 0) {
-				throw new Error("Diarization returned no speech segments.");
-			}
-			return {
-				body: renderDiarizedTranscript(segments, diarization.speakerTemplate),
-			};
-		}
-
-		updateNotice("Creating audio chunks...");
-		const files = await createChunkFiles(audio);
-		this.assertActive();
-		updateNotice("Starting transcription...");
-		const { text, failedChunks, lastError } = await this.transcribeChunks(files, updateNotice);
-		this.assertActive();
-
-		// Strip the error placeholders (and trim) to see whether ANY real speech was
-		// transcribed. Nothing real means every chunk failed or the only successes
-		// were empty - either way there is no usable transcript, so throw instead of
-		// saving a body of pure error markers (empty chunks join to " ", not "").
-		const realText = text.replace(CHUNK_ERROR_PLACEHOLDER_PATTERN, " ").trim();
-		if (realText.length === 0) {
-			if (failedChunks === 0) throw new Error("Transcription returned no text.");
-			const detail = lastError instanceof Error ? lastError.message : String(lastError);
-			throw new Error(
-				`all ${files.length} audio chunk(s) failed or returned no text. Last error: ${detail}`,
-			);
-		}
-
-		// Reflow the full body (placeholders kept inline so the user can see which
-		// chunks failed) after sentence periods for readability.
-		const body = text.trim().replace(/\.\s+/g, ".\n\n");
-
-		const warning =
-			failedChunks > 0
-				? `Transcription saved, but ${failedChunks} of ${files.length} chunk(s) failed - look for [Error transcribing chunk N] markers and re-run after deleting the note to retry.`
-				: undefined;
-		return { body, warning };
-	}
-
-	/** Route the episode audio to the configured diarization provider (#168). */
-	private async diarize(
-		audio: DiarizationAudio,
-		provider: DiarizationProviderId,
-		updateNotice: (message: string) => void,
-	): Promise<DiarizedSegment[]> {
-		this.assertActive();
-		if (provider === "deepgram") {
-			const apiKey = this.plugin.credentials.get(this.plugin.settings, "deepgram");
-			if (!apiKey) {
-				throw new Error("Missing Deepgram API key on this device.");
-			}
-			// Deepgram ingests the whole file in one request, so it needs no
-			// chunking, which is exactly why its speaker labels stay consistent
-			// across the entire episode.
-			const segments = await this.waitForLifecycle(
-				diarizeWithDeepgram({
-					audio,
-					apiKey,
-					onProgress: updateNotice,
-					signal: this.signal,
-				}),
-			);
-			this.assertActive();
-			return segments;
-		}
-
-		// OpenAI diarization takes Whisper's ~20 MB chunks, capped at 600 s so each request
-		// answers inside the timeout. Speaker labels can differ across chunks.
-		updateNotice("Creating audio chunks...");
-		const chunkFiles = await createChunkFiles({
-			...audio,
-			maxSeconds: OPENAI_DIARIZE_PART_SECONDS,
-		});
-		this.assertActive();
-		const segments = await diarizeWithOpenAI({
-			apiKey: this.getApiKey(),
-			chunkFiles,
-			maxRetries: MAX_RETRIES,
-			onProgress: updateNotice,
-			signal: this.signal,
-		});
-		this.assertActive();
-		return segments;
-	}
-
-	private async transcribeChunks(
-		files: File[],
-		updateNotice: (message: string) => void,
-	): Promise<{ text: string; failedChunks: number; lastError: unknown }> {
-		const apiKey = this.getApiKey();
-		const transcriptions: string[] = Array.from({ length: files.length });
-		let completedChunks = 0;
-		let failedChunks = 0;
-		let lastError: unknown;
-		let nextIndex = 0;
-
-		const updateProgress = () => {
-			const progress = ((completedChunks / files.length) * 100).toFixed(1);
-			updateNotice(
-				`Transcribing... ${completedChunks}/${files.length} chunks completed (${progress}%)`,
-			);
-		};
-
-		updateProgress();
-
-		const worker = async () => {
-			while (true) {
-				this.assertActive();
-				const index = nextIndex++;
-				if (index >= files.length) return;
-				const file = files[index];
-
-				let retries = 0;
-				while (retries < MAX_RETRIES) {
-					this.assertActive();
-					try {
-						const result = await createTranscription(
-							apiKey,
-							{ model: "whisper-1", file },
-							this.signal,
-						);
-						this.assertActive();
-						const text = (result as { text?: unknown } | null)?.text;
-						if (typeof text !== "string") {
-							throw new Error("OpenAI returned a transcription without text.");
-						}
-						transcriptions[index] = text;
-						completedChunks++;
-						updateProgress();
-						break;
-					} catch (error) {
-						this.assertActive();
-						retries++;
-						if (retries >= MAX_RETRIES || !canRetry(error)) {
-							console.error(
-								`Failed to transcribe chunk ${index} after ${retries} attempt(s):`,
-								error,
-							);
-							transcriptions[index] = chunkErrorPlaceholder(index);
-							failedChunks++;
-							lastError = error;
-							completedChunks++;
-							updateProgress();
-							break;
-						} else {
-							await this.waitForRetry(retryDelayMs(error, 1000 * retries));
-						}
-					}
-				}
-			}
-		};
-
-		const workerCount = Math.min(MAX_CONCURRENT_CHUNK_TRANSCRIPTIONS, files.length);
-		const workers = Array.from({ length: workerCount }, () => worker());
-
-		await Promise.all(workers);
-		this.assertActive();
-
-		return { text: transcriptions.join(" "), failedChunks, lastError };
-	}
-
-	private waitForRetry(delayMs: number): Promise<void> {
-		this.assertActive();
-		const { signal } = this;
-
-		return new Promise((resolve, reject) => {
-			const timeout = window.setTimeout(() => {
-				signal.removeEventListener("abort", onAbort);
-				resolve();
-			}, delayMs);
-			const onAbort = () => {
-				window.clearTimeout(timeout);
-				signal.removeEventListener("abort", onAbort);
-				reject(toError(this.getAbortReason(), "PodNotes transcription was aborted."));
-			};
-
-			signal.addEventListener("abort", onAbort, { once: true });
-			if (signal.aborted) onAbort();
-		});
+		const { label } = transcriptionChoice(this.plugin.settings);
+		return `${error.message} Run "${TRANSCRIBE_FROM_AUDIO_COMMAND}" to transcribe it with ${label} instead, which uses your API credit.`;
 	}
 
 	private waitForLifecycle<T>(operation: Promise<T>): Promise<T> {
@@ -547,15 +338,6 @@ export class TranscriptionService {
 		} else {
 			throw new Error("Expected a file but found a folder at transcript path.");
 		}
-	}
-
-	private getApiKey(): string {
-		this.assertActive();
-		const apiKey = this.plugin.credentials.get(this.plugin.settings, "openai");
-		if (!apiKey) {
-			throw new Error("Missing OpenAI API key on this device");
-		}
-		return apiKey;
 	}
 
 	dispose(): void {

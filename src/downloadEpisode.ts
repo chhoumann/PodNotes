@@ -586,7 +586,7 @@ function normalizeAudioExtension(
  */
 export async function getEpisodeAudioBuffer(
 	episode: Episode,
-): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
+): Promise<{ buffer: ArrayBuffer; extension: string }> {
 	const { app } = get(plugin);
 	const episodeMediaType = getEpisodeMediaType(episode);
 	if (episodeMediaType !== "audio") {
@@ -640,7 +640,6 @@ export async function getEpisodeAudioBuffer(
 		return {
 			buffer: data,
 			extension: normalizeAudioExtension(inferredExtension, audioContainerHint) ?? "mp3",
-			basename: replaceIllegalFileNameCharactersInString(episode.title) || "episode",
 		};
 	} catch (error: unknown) {
 		throw new Error(`Failed to fetch ${episode.title}: ${getErrorMessage(error)}`);
@@ -655,7 +654,7 @@ function getAudioContainerHint(episode: Episode): EpisodeMediaType | undefined {
 
 async function readVaultAudio(
 	filePath: string,
-): Promise<{ buffer: ArrayBuffer; extension: string; basename: string }> {
+): Promise<{ buffer: ArrayBuffer; extension: string }> {
 	const { app } = get(plugin);
 	const file = app.vault.getAbstractFileByPath(filePath);
 	if (!(file instanceof TFile)) {
@@ -674,14 +673,7 @@ async function readVaultAudio(
 	return {
 		buffer,
 		extension: fileExtension.toLowerCase() === "mp4" ? "m4a" : fileExtension,
-		basename: file.basename || getFileBasename(file.path || filePath),
 	};
-}
-
-function getFileBasename(filePath: string): string {
-	const fileName = filePath.split("/").pop() ?? filePath;
-	const dot = fileName.lastIndexOf(".");
-	return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
 // Binary signature detection lives in ./download/mediaSignatures

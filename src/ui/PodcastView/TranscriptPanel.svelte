@@ -3,6 +3,7 @@
 	import type { Episode } from "src/types/Episode";
 	import { formatDuration } from "src/utility/formatDuration";
 	import { isLocalFile } from "src/utility/isLocalFile";
+	import { transcriptionChoice } from "src/services/transcription";
 	import { transcriptNote } from "src/services/TranscriptionService";
 	import { getEpisodeMediaType } from "src/utility/mediaType";
 	import { icon } from "../obsidian/icon";
@@ -66,10 +67,7 @@
 		void $rowHasNote;
 		return transcriptNote(app.vault, $settings, episode);
 	});
-	const provider = $derived.by(() => {
-		const { diarization } = $settings.transcript;
-		return diarization?.enabled && diarization.provider === "deepgram" ? "Deepgram" : "OpenAI";
-	});
+	const provider = $derived(transcriptionChoice($settings).label);
 
 	$effect(() => {
 		finding = false;

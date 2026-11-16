@@ -1,34 +1,34 @@
 import { TFile } from "obsidian";
+import { readable } from "svelte/store";
 import { afterEach, beforeEach, vi } from "vitest";
 import type PodNotes from "src/main";
 import type { TranscriptLink } from "src/parser/feedDocumentParser";
+import type { FeedRepository } from "src/services/FeedRepository";
+import type { CredentialKind } from "src/types/Credentials";
 import type { Episode } from "src/types/Episode";
-import { corsBlockedFetch, openAIMock, openAIRequestUrl } from "./openaiRequestUrl";
+import { corsBlockedFetch, providerMock, providerRequestUrl } from "./providerRequestUrl";
 
 /** What each Notice opened with, oldest first. */
 export const noticeMessages: string[] = [];
 
-/** Stand-ins for the audio download and Deepgram. OpenAI answers through `openAIMock`. */
+/** Stands in for the audio download. The providers answer through `providerMock`. */
 export const getEpisodeAudioBufferMock = vi.fn();
-export const diarizeWithDeepgramMock = vi.fn();
 
 /**
- * Resets the mocks above, `openAIMock` and `noticeMessages` before each test of the
- * calling file, and blocks `fetch` as Obsidian's CORS check does for OpenAI. The file
- * still mocks `obsidian`, `../downloadEpisode` and `./diarization` with these handles,
- * because `vi.mock` applies only to its own file.
+ * Resets the mock above, `providerMock` and `noticeMessages` before each test of the
+ * calling file, and blocks `fetch` as Obsidian's CORS check does for a provider. The file
+ * still mocks `obsidian` and `../downloadEpisode` with these handles, because `vi.mock`
+ * applies only to its own file.
  */
 export function installTranscriptionMocks(): void {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		noticeMessages.length = 0;
-		openAIMock.mockReset();
+		providerMock.mockReset();
 		vi.stubGlobal("fetch", corsBlockedFetch);
-		diarizeWithDeepgramMock.mockReset();
 		getEpisodeAudioBufferMock.mockResolvedValue({
 			buffer: new ArrayBuffer(1024),
 			extension: "mp3",
-			basename: "episode",
 		});
 	});
 
@@ -39,7 +39,7 @@ export function installTranscriptionMocks(): void {
 
 /**
  * The `obsidian` module whose Notice records its opening message in `noticeMessages`
- * and whose requestUrl answers with `openAIMock`.
+ * and whose requestUrl answers with `providerMock`.
  */
 export function mockedObsidian(obsidian: typeof import("obsidian")): typeof import("obsidian") {
 	class RecordingNotice extends obsidian.Notice {
@@ -51,7 +51,7 @@ export function mockedObsidian(obsidian: typeof import("obsidian")): typeof impo
 	return {
 		...obsidian,
 		Notice: RecordingNotice,
-		requestUrl: openAIRequestUrl as typeof obsidian.requestUrl,
+		requestUrl: providerRequestUrl as typeof obsidian.requestUrl,
 	};
 }
 
@@ -70,6 +70,11 @@ export const mockEpisode: Episode = {
 export function createMockPlugin(
 	overrides: {
 		openAIKey?: string;
+		deepgramKey?: string;
+		/** Speaker labels are on, with this provider. */
+		speakers?: "openai" | "deepgram";
+		/** In place of a repository with no saved feed. */
+		feeds?: FeedRepository;
 		podcast?: Episode | null;
 		existingTranscriptPath?: string | null;
 		transcripts?: TranscriptLink[];
@@ -79,6 +84,9 @@ export function createMockPlugin(
 ): PodNotes {
 	const {
 		openAIKey = "test-api-key",
+		deepgramKey = "",
+		speakers,
+		feeds,
 		podcast = mockEpisode,
 		existingTranscriptPath = null,
 		transcripts,
@@ -88,6 +96,7 @@ export function createMockPlugin(
 
 	const existing = (path: string) =>
 		path === existingTranscriptPath ? Object.assign(new TFile(), { path }) : null;
+	const keys: Record<CredentialKind, string> = { openai: openAIKey, deepgram: deepgramKey };
 
 	return {
 		settings: {
@@ -97,25 +106,27 @@ export function createMockPlugin(
 			transcript: {
 				path: "Transcripts/{{podcast}}/{{title}}.md",
 				template: "# {{title}}\n\n{{transcript}}",
+				diarization: {
+					enabled: speakers !== undefined,
+					provider: speakers ?? "openai",
+					speakerTemplate: "",
+				},
 			},
 			download: {
 				path: "Downloads",
 			},
 		},
-		feeds: {
+		feeds: feeds ?? {
 			load: vi.fn(loadFeed),
 			episodeMetadata: vi.fn(() => (transcripts ? { transcripts } : undefined)),
 			itemUrl: vi.fn((_key: string, link: string) => new URL(link, feedUrl).href),
+			subscribe: readable(new Map()).subscribe,
 		},
 		credentials: {
-			get: vi.fn((_settings, kind: "openai" | "deepgram") =>
-				kind === "openai" ? openAIKey || null : null,
-			),
-			has: vi.fn((_settings, kind: "openai" | "deepgram") =>
-				kind === "openai" ? Boolean(openAIKey) : false,
-			),
-			status: vi.fn((_settings, kind: "openai" | "deepgram") =>
-				kind === "openai" && openAIKey ? "available" : "unconfigured",
+			get: vi.fn((_settings, kind: CredentialKind) => keys[kind] || null),
+			has: vi.fn((_settings, kind: CredentialKind) => Boolean(keys[kind])),
+			status: vi.fn((_settings, kind: CredentialKind) =>
+				keys[kind] ? "available" : "unconfigured",
 			),
 		},
 		api: {

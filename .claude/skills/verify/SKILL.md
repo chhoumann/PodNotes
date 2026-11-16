@@ -266,7 +266,9 @@ its profile. It keeps the vault and `.obsidian-e2e-artifacts/`. Delete
   live in `screens/scenes.mjs`, the instance calls in `screens/instance.mjs`,
   and the contact sheet in `screens/sheet.mjs`.
 - `.claude/skills/verify/fixtures.mjs` runs as `feed`, `feed-b`, `transcripts`,
-  `library`, `retitle`, `requests`, `audio [vault path]` or `stop`. `library`
+  `private`, `library`, `retitle`, `requests`, `audio [vault path]` or `stop`.
+  `private` prints a feed at `priv3.supercast.com`, an address PodNotes keeps in
+  SecretStorage as it does a Supercast subscriber's. `library`
   prints the URL of a manifest of eight podcasts, one whose feed answers 404, and
   one more feed to add. Their episodes' media is silence as long as the feed
   says. `#213` has chapters and a WebVTT transcript, and `Signal & Noise` has a 10 s video episode that

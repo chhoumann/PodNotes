@@ -32,6 +32,7 @@ const instance = resolveInstanceOptions(
 );
 const CALL_TIMEOUT_MS = 15000;
 const FIXTURE_TRANSCRIPTION = "This text came from the fixture provider.";
+const FIXTURE_REPLY = "A second speaker answers.";
 const PATH_HOSTS = [FIXTURE_HOST, "api.openai.com", "api.deepgram.com"];
 
 /** @param {string} code */
@@ -75,6 +76,15 @@ const WATCH = `(() => {
 		}
 	};
 	const text = ${jsLiteral(FIXTURE_TRANSCRIPTION)};
+	// Deepgram's words: one every 0.4 s, the reply 12 s in from a second speaker.
+	const words = (sentence, speaker, from) => sentence.split(" ").map((word, index) => ({
+		word: word.toLowerCase().replace(/[^a-z]/g, ""),
+		punctuated_word: word,
+		start: from + index * 0.4,
+		end: from + index * 0.4 + 0.3,
+		speaker,
+	}));
+	const deepgram = { results: { channels: [{ alternatives: [{ words: [...words(text, 0, 0), ...words(${jsLiteral(FIXTURE_REPLY)}, 1, 12)] }] }] } };
 	const originalFetch = window.fetch;
 	window.fetch = async function (input, init) {
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -88,12 +98,12 @@ const WATCH = `(() => {
 		if (channel === "request-url" && typeof request?.url === "string") {
 			const method = (request.method ?? "GET").toUpperCase();
 			const answer = request.url.startsWith("https://api.openai.com/")
-				? { text, segments: [{ speaker: "A", text, start: 0, end: 1 }] }
+				? { text }
 				: request.url.startsWith("https://api.deepgram.com/")
-					? { results: { utterances: [{ speaker: 0, transcript: text, start: 0, end: 1 }] } }
+					? deepgram
 					: null;
 			if (answer) {
-				entries.push({ via: "requestUrl", method, url: logged(request.url), answeredBy: "fixture provider", uploadBytes: request.body?.byteLength ?? 0 });
+				entries.push({ via: "requestUrl", method, url: logged(request.url), answeredBy: "fixture provider", contentType: request.contentType, uploadBytes: request.body?.byteLength ?? 0 });
 				const body = new TextEncoder().encode(JSON.stringify(answer)).buffer;
 				queueMicrotask(() => ipc.emit(replyChannel, {}, { status: 200, headers: { "content-type": "application/json" }, body }));
 				return;

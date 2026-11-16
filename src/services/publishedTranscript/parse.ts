@@ -178,11 +178,12 @@ function decodeEntities(text: string): string {
 	});
 }
 
-function timed(cues: TranscriptCue[]): ParsedTranscript | undefined {
+/** Undefined when there are no cues, so an empty transcript is never a result. */
+export function timed(cues: TranscriptCue[]): ParsedTranscript | undefined {
 	return isNonEmpty(cues) ? { kind: "timed", cues } : undefined;
 }
 
-function untimed(paragraphs: string[]): ParsedTranscript | undefined {
+export function untimed(paragraphs: string[]): ParsedTranscript | undefined {
 	return isNonEmpty(paragraphs) ? { kind: "untimed", paragraphs } : undefined;
 }
 

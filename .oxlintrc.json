@@ -33,6 +33,23 @@
 	},
 	"overrides": [
 		{
+			"files": ["src/**/*.ts", "tests/**/*.ts"],
+			"excludeFiles": ["src/services/transcription/**"],
+			"rules": {
+				"no-restricted-imports": [
+					"error",
+					{
+						"patterns": [
+							{
+								"group": ["**/services/transcription/**", "./transcription/**"],
+								"message": "Import from src/services/transcription, the folder's public surface."
+							}
+						]
+					}
+				]
+			}
+		},
+		{
 			"files": ["src/**/*.ts"],
 			"excludeFiles": ["src/**/*.test.ts", "src/**/*.spec.ts"],
 			"rules": {

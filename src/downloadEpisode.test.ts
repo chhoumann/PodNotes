@@ -941,10 +941,6 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 		const slash = path.lastIndexOf("/");
 		(file as { path: string }).path = path;
 		(file as { extension: string }).extension = dot > slash ? path.slice(dot + 1) : "";
-		(file as { basename: string }).basename = path.slice(
-			slash + 1,
-			dot > slash ? dot : undefined,
-		);
 		return file;
 	}
 
@@ -1031,7 +1027,6 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 
 		expect(decode(result.buffer)).toBe("CACHED-CORRECT-AUDIO");
 		expect(result.extension).toBe("mp3");
-		expect(result.basename).toBe("cached");
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
@@ -1357,7 +1352,6 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 
 		expect(decode(result.buffer)).toBe("AUDIO-WEBM-BYTES");
 		expect(result.extension).toBe("webm");
-		expect(result.basename).toBe("audio-webm");
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
@@ -1380,7 +1374,6 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 
 		expect(decode(result.buffer)).toBe("AUDIO-MP4-BYTES");
 		expect(result.extension).toBe("m4a");
-		expect(result.basename).toBe("audio-mp4");
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
@@ -1402,7 +1395,6 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 
 		expect(decode(result.buffer)).toBe("LEGACY-AUDIO-MP4-BYTES");
 		expect(result.extension).toBe("m4a");
-		expect(result.basename).toBe("legacy-audio-mp4");
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
@@ -1439,7 +1431,6 @@ describe("getEpisodeAudioBuffer (issue #107)", () => {
 
 		expect(decode(result.buffer)).toBe("LOCAL-AUDIO");
 		expect(result.extension).toBe("m4a");
-		expect(result.basename).toBe("recording");
 		expect(requestUrlMock).not.toHaveBeenCalled();
 	});
 
