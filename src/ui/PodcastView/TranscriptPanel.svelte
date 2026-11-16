@@ -185,7 +185,7 @@
 					<button
 						type="button"
 						class="pn-btn"
-						disabled={!$online}
+						disabled={!$online && !choice.server}
 						onclick={() => transcribeFromAudio()}
 					>
 						<span {@attach icon("key")}></span>Transcribe with {provider}

@@ -618,14 +618,17 @@ describe("an episode whose feed publishes no transcript", () => {
 		).toHaveAccessibleName("Transcribe with Deepgram Paid");
 	});
 
-	test("names the user's own server without calling it paid", async () => {
+	test("names the user's own server without calling it paid, and keeps it on while offline", async () => {
 		get(plugin).settings.transcript.provider = "openai-compatible";
 		plugin.update((host) => host);
 		await openTranscript(episodeOf([]), 0);
+		const own = await screen.findByRole("button", { name: /^Transcribe with/ });
+		expect(own).toHaveAccessibleName("Transcribe with your server");
 
-		expect(
-			await screen.findByRole("button", { name: /^Transcribe with/ }),
-		).toHaveAccessibleName("Transcribe with your server");
+		// A server on this machine transcribes with no internet.
+		services.online.set(false);
+		await tick();
+		expect(own).toBeEnabled();
 	});
 
 	test("offers no paid transcription for a video", async () => {
