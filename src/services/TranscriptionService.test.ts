@@ -1782,6 +1782,40 @@ describe("TranscriptionService", () => {
 				);
 			});
 
+			test.each([
+				[
+					"keeps Qwen's words as they are, with symbols its text leaves out or adds",
+					"Use C for systems. It is 5 degrees, 5 more today. Then -3.",
+					"Use C++ for systems It is -5 degrees 5% more today Then 3",
+					// The note escapes "%", which starts a comment in Obsidian.
+					"Use C++ for systems. It is -5 degrees, 5\\% more today. Then 3.",
+				],
+				[
+					"restores punctuation to Qwen's words when one of them holds a decimal point",
+					"It rose 3.5 percent, then fell. Odd!",
+					"It rose 3.5 percent then fell Odd",
+					"It rose 3.5 percent, then fell. Odd!",
+				],
+			])("%s", async (_, text, said, note) => {
+				openRouter(() =>
+					Response.json({
+						text,
+						words: said.split(" ").map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) ${note}`,
+				);
+			});
+
 			test("Voxtral's segments from two parts of at most 900 s become paragraphs timed from the episode's start", async () => {
 				const stream = MP3_STREAMS.mpeg25At8Kbps;
 				const plugin = useOpenRouter({ model: VOXTRAL, speakers: false });
