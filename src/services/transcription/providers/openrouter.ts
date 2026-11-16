@@ -249,8 +249,8 @@ function punctuated(words: Word[], text: unknown): Word[] {
 	if (typeof text !== "string" || words.some(punctuatedAlready)) return words;
 	// Chinese and Japanese put no space between sentences, so their marks end a token too.
 	const tokens = text
-		.replace(/[。，、？！；：」』》】）]/gu, "$& ")
-		.replace(/[「『《【（]/gu, " $&")
+		.replace(/[。，、？！；：」』》】）]+/gu, "$& ")
+		.replace(/[「『《【（]+/gu, " $&")
 		.split(/\s+/)
 		.filter(Boolean);
 	// Apostrophes count inside a word, so "we'll" is not "well", and not at its ends, where

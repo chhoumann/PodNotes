@@ -1809,6 +1809,12 @@ describe("TranscriptionService", () => {
 					"你好。 我们走吧！ 「好」 Wait— really",
 				],
 				[
+					"keeps a run of Chinese marks together on one Qwen word",
+					"「你好。」我们走吧！！",
+					"你好 我们走吧",
+					"「你好。」 我们走吧！！",
+				],
+				[
 					"does not give a Qwen contraction the punctuation of a word spelled like it without the apostrophe",
 					"Well, we'll see. Okay.",
 					"we'll see Okay",
