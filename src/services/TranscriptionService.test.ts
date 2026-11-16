@@ -1833,6 +1833,12 @@ describe("TranscriptionService", () => {
 					"Hello world ; Next",
 				],
 				[
+					"adds no second mark to a Qwen word that has one beside an emoji",
+					"“Hi there. Hello… Next! 你好。 我们走吧！！",
+					"“🙂Hi there Hello…🙂 Next 你好。🙂 我们走吧",
+					"“🙂Hi there. Hello…🙂 Next! 你好。🙂 我们走吧！！",
+				],
+				[
 					"adds nothing to Qwen's words when one already has punctuation before an emoji",
 					"Hello world. Next!",
 					"Hello world.🙂 Next",
