@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 106,162 bytes. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 106,544 bytes. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -34,24 +34,41 @@ main.js raw: 318989 bytes; budget 330000 bytes; 11011 bytes remaining
 main.js gzip (level 9): 103397 bytes; budget 104000 bytes; 603 bytes remaining
 ```
 
-On 2026-11-14 it rose from 104,000 for the transcription provider and model
-settings with ElevenLabs Scribe v3. The transcription engine had taken the
-branch to 103,795 bytes, and the settings, their migration and the ElevenLabs
-provider measured 866 more. The budget rose by those 866 bytes. With them:
+On 2026-11-14 it rose from 104,000 for issue #532: OpenAI diarization cuts
+MP3s into the fewest balanced chunks under 20 MB and 600 s, skipping ID3v2
+tags. With it:
 
 ```text
-main.js raw: 320988 bytes; budget 330000 bytes; 9012 bytes remaining
-main.js gzip (level 9): 104661 bytes; budget 104866 bytes; 205 bytes remaining
+main.js raw: 320267 bytes; budget 330000 bytes; 9733 bytes remaining
+main.js gzip (level 9): 104145 bytes; budget 104145 bytes; 0 bytes remaining
 ```
 
-On 2026-11-14 it rose again, from 104,866, for OpenRouter. The branch it builds
-on measured 104,706 bytes. The OpenRouter provider, its model catalog filter
-and the speaker label warnings measured 1,296 more. The budget rose by those
-1,296 bytes. With them:
+On 2026-11-14 it rose from 104,145 to 104,290 for the transcription engine,
+which measured 104,060 on its own. On top of it, 170 bytes measure audio in other
+formats against each model's length cap, for at most 5 s and only while the job
+runs, so a long `.m4a` under the size cap is split instead of sent whole, and 60
+keep a signed enclosure URL from going to a provider. With them:
 
 ```text
-main.js raw: 325002 bytes; budget 330000 bytes; 4998 bytes remaining
-main.js gzip (level 9): 106002 bytes; budget 106162 bytes; 160 bytes remaining
+main.js raw: 319405 bytes; budget 330000 bytes; 10595 bytes remaining
+main.js gzip (level 9): 104290 bytes; budget 104290 bytes; 0 bytes remaining
+```
+
+On 2026-11-16 it rose from 104,290 by 930 bytes for the transcription provider
+and model settings, their migration, and the ElevenLabs Scribe v3 provider. With
+them:
+
+```text
+main.js raw: 322274 bytes; budget 330000 bytes; 7726 bytes remaining
+main.js gzip (level 9): 105220 bytes; budget 105220 bytes; 0 bytes remaining
+```
+
+On 2026-11-16 it rose from 105,220 by 1,324 bytes for OpenRouter: the provider,
+its model catalog filter and the speaker label warnings. With them:
+
+```text
+main.js raw: 326347 bytes; budget 330000 bytes; 3653 bytes remaining
+main.js gzip (level 9): 106544 bytes; budget 106544 bytes; 0 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
