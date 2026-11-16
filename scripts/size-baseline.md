@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 109,084 bytes, and the raw budget 333,767. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 109,104 bytes, and the raw budget 333,862. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -80,24 +80,24 @@ main.js raw: 328677 bytes; budget 330000 bytes; 1323 bytes remaining
 main.js gzip (level 9): 107399 bytes; budget 107399 bytes; 0 bytes remaining
 ```
 
-On 2026-11-16 the gzip budget rose from 107,399 by 714 bytes, and the raw budget
-from 330,000 by 432, for Voxtral Mini Transcribe 3 and Qwen3 ASR on OpenRouter,
+On 2026-11-16 the gzip budget rose from 107,399 by 736 bytes, and the raw budget
+from 330,000 by 527, for Voxtral Mini Transcribe 3 and Qwen3 ASR on OpenRouter,
 with Qwen3 ASR's punctuation restored from its text letter by letter, so split
 words and stretches of text the words leave out keep it. With them:
 
 ```text
-main.js raw: 330432 bytes; budget 330432 bytes; 0 bytes remaining
-main.js gzip (level 9): 108113 bytes; budget 108113 bytes; 0 bytes remaining
+main.js raw: 330527 bytes; budget 330527 bytes; 0 bytes remaining
+main.js gzip (level 9): 108135 bytes; budget 108135 bytes; 0 bytes remaining
 ```
 
-On 2026-11-16 both rose for the OpenAI-compatible server provider: from 330,432
-raw by 3,335 bytes, and from 108,113 gzip by 971 bytes. That is the provider, a
+On 2026-11-16 both rose for the OpenAI-compatible server provider: from 330,527
+raw by 3,335 bytes, and from 108,135 gzip by 969 bytes. That is the provider, a
 verbose_json reader shared with OpenRouter, and Whisper's word pieces joined.
 With it:
 
 ```text
-main.js raw: 333767 bytes; budget 333767 bytes; 0 bytes remaining
-main.js gzip (level 9): 109084 bytes; budget 109084 bytes; 0 bytes remaining
+main.js raw: 333862 bytes; budget 333862 bytes; 0 bytes remaining
+main.js gzip (level 9): 109104 bytes; budget 109104 bytes; 0 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
