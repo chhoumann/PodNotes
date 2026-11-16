@@ -52,7 +52,10 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	const parts: TranscribedPart[] = [];
 	let lastFailure: TranscriptionError | undefined;
 
-	const url = model.url ? await publicAudioUrl(episode, job.feeds) : undefined;
+	// An address goes in one request, so an episode the feed says is longer than the model
+	// takes in one is uploaded in parts.
+	const fits = (episode.duration ?? 0) <= (model.maxSeconds ?? Infinity);
+	const url = model.url && fits ? await publicAudioUrl(episode, job.feeds) : undefined;
 	if (url) {
 		onProgress(progress);
 		try {

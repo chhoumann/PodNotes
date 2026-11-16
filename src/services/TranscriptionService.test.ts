@@ -1541,6 +1541,30 @@ describe("TranscriptionService", () => {
 			expect(savedNote(plugin)).toBe(labeled);
 		});
 
+		test.each([
+			[1800, "by its address", true],
+			[1801, "in parts it uploads", false],
+		])(
+			"Scribe v2 takes a public episode the feed says lasts %i s %s",
+			async (duration, _, byAddress) => {
+				openRouter();
+				const episode: Episode = { ...mockEpisode, duration };
+				const plugin = useOpenRouter({
+					model: "elevenlabs/scribe-v2",
+					feeds: savedFeedRepository(publicFeed, [episode]),
+				});
+
+				await expect(finalNotice(plugin, episode)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(sent().map(({ contentType }) => contentType === "application/json")).toEqual(
+					[byAddress],
+				);
+				expect(getEpisodeAudioBufferMock).toHaveBeenCalledTimes(byAddress ? 0 : 1);
+			},
+		);
+
 		test("a 40 MB episode goes in parts of at most 18 MB and 1,800 s, one at a time, timed to the millisecond from the episode's start", async () => {
 			const stream = MP3_STREAMS.mpeg1At96Kbps;
 			const frames = Math.ceil(40_000_000 / stream.frameBytes);
