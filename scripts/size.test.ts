@@ -20,19 +20,19 @@ function check(name: string, contents: string | Buffer) {
 
 describe("bundle budget CLI", () => {
 	it("allows the raw budget boundary and rejects one extra byte", () => {
-		expect(check("boundary.js", "a".repeat(330_198)).status).toBe(0);
-		const result = check("over.js", "a".repeat(330_199));
+		expect(check("boundary.js", "a".repeat(330_265)).status).toBe(0);
+		const result = check("over.js", "a".repeat(330_266));
 		expect(result.status).toBe(1);
-		expect(result.stdout).toContain("budget 330198 bytes; OVER by 1 bytes");
+		expect(result.stdout).toContain("budget 330265 bytes; OVER by 1 bytes");
 	});
 
 	it("rejects gzip growth even when raw bytes fit", () => {
 		const result = check("gzip.js", randomBytes(110_000));
 		expect(result.status).toBe(1);
 		expect(result.stdout).toMatch(
-			/gzip \(level 9\): \d+ bytes; budget 107901 bytes; OVER by \d+ bytes/,
+			/gzip \(level 9\): \d+ bytes; budget 107973 bytes; OVER by \d+ bytes/,
 		);
-		expect(result.stdout).toContain("budget 330198 bytes; 220198 bytes remaining");
+		expect(result.stdout).toContain("budget 330265 bytes; 220265 bytes remaining");
 	});
 
 	it("fails on absent or empty artifacts instead of reporting a small build", () => {
