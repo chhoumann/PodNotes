@@ -1748,6 +1748,53 @@ describe("TranscriptionService", () => {
 				);
 			});
 
+			test("a voice's clip comes from its speech, not from a silence between two of its words", async () => {
+				// Ann says one 0.216 s word, is silent for 29.808 s, then talks for 5.04 s. One turn
+				// across the silence would clip 9 s of it from 0.2 s in.
+				getEpisodeAudioBufferMock.mockResolvedValue(
+					episode([
+						{ voice: ANN, from: 0, to: 3 },
+						{ voice: ANN, from: 417, to: 487 },
+						{ voice: BOB, from: 487, to: 904 },
+						{ voice: BOB, from: 22_500, to: 22_917 },
+						{ voice: ANN, from: 22_917, to: 23_334 },
+					]),
+				);
+				hearing();
+				const plugin = grok();
+
+				const notice = await finalNotice(plugin);
+
+				const labels = spoken(savedNote(plugin));
+				expect(new Set(labels.filter((label) => label.endsWith("Ann")))).toEqual(
+					new Set(["1 Ann"]),
+				);
+				expect(new Set(labels.filter((label) => label.endsWith("Bob")))).toEqual(
+					new Set(["2 Bob"]),
+				);
+				expect(notice).toBe("Transcription completed and saved.");
+			});
+
+			test("short pauses between a voice's words keep them one turn, long enough for a clip", async () => {
+				// Every voice talks in words of 1.008 s with 0.288 s between them.
+				const words = (voice: number, from: number, to: number) =>
+					Array.from({ length: Math.floor((to - from) / 18) }, (_, n) => ({
+						voice,
+						from: from + n * 18,
+						to: from + n * 18 + 14,
+					}));
+				getEpisodeAudioBufferMock.mockResolvedValue(
+					episode(TURNS.flatMap(({ voice, from, to }) => words(voice, from, to))),
+				);
+				hearing();
+				const plugin = grok();
+
+				const notice = await finalNotice(plugin);
+
+				expect(notice).toBe("Transcription completed and saved.");
+				expect(sent()).toHaveLength(3);
+			});
+
 			test("a voice whose turns are all under 2.6 s gets no clip, keeps its own number, and the notice says labels restart in each", async () => {
 				// Cy speaks 2.016 s, after Ann in the second part.
 				getEpisodeAudioBufferMock.mockResolvedValue(

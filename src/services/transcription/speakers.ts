@@ -8,6 +8,9 @@ const MIN_TURN_SECONDS = 2.6;
 const CLIP_INSET_SECONDS = 0.2;
 const MAX_CLIP_SECONDS = 9;
 
+/** A longer pause ends a turn, so a clip of the turn is speech and not the silence between. */
+const MAX_PAUSE_SECONDS = 2;
+
 /** A speaker label's words in a row. Words without a label make turns of their own. */
 type Turn = Span & { readonly speaker?: string };
 
@@ -15,8 +18,11 @@ function turnsOf(words: readonly Word[]): Turn[] {
 	const turns: Turn[] = [];
 	for (const { speaker, start, end } of words) {
 		const last = turns[turns.length - 1];
-		if (last && last.speaker === speaker) turns[turns.length - 1] = { ...last, end };
-		else turns.push({ speaker, start, end });
+		if (last && last.speaker === speaker && start - last.end <= MAX_PAUSE_SECONDS) {
+			turns[turns.length - 1] = { ...last, end };
+		} else {
+			turns.push({ speaker, start, end });
+		}
 	}
 	return turns;
 }
