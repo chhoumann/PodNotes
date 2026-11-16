@@ -43,6 +43,7 @@ function getMimeType(fileExtension: string): string {
 export async function splitAudio(
 	audio: { readonly buffer: ArrayBuffer; readonly extension: string },
 	{ maxBytes, maxSeconds = Infinity }: PartCaps,
+	signal?: AbortSignal,
 ): Promise<AudioPart[]> {
 	const { buffer, extension } = audio;
 	const type = getMimeType(extension);
@@ -64,8 +65,12 @@ export async function splitAudio(
 		}));
 	}
 
-	if (fits) return whole();
-	const parts = await convertToWavParts(buffer, maxBytes);
+	// Other formats are measured by their metadata, without decoding them, and audio of an
+	// unknown length goes whole.
+	const seconds = fits ? await mediaSeconds(buffer, type, signal) : NaN;
+	if (signal?.aborted) throw signal.reason;
+	if (fits && !(seconds > maxSeconds)) return whole();
+	const parts = await convertToWavParts(buffer, maxBytes, maxSeconds);
 	if (parts.length === 0) {
 		throw new Error(
 			`Could not split ${extension || "audio"} audio for transcription. This format must be decoded to WAV before splitting, but the audio decoder is unavailable or could not decode it.`,
@@ -91,9 +96,10 @@ const SAMPLE_RATES = [
 ];
 
 /**
- * Where each part of an MP3 starts, in bytes and in seconds of audio. Parts start at frame
- * starts, there are as few as both caps allow, and they hold an equal number of frames, so
- * no part is a few seconds long. The first part starts at byte 0 and keeps a leading tag.
+ * Where each part of an MP3 starts, in bytes and in seconds of audio: at frame starts, in as
+ * few parts as both caps allow, cut as close to equal frame counts as the size cap lets
+ * them be, so no part is a one-frame tail that cannot be decoded. The first part starts at
+ * byte 0 and keeps a leading tag.
  */
 function mp3PartStarts(
 	frames: Mp3Frame[],
@@ -101,43 +107,87 @@ function mp3PartStarts(
 	maxBytes: number,
 	maxSeconds: number,
 ): { offset: number; seconds: number }[] {
-	const total = frames.reduce((seconds, frame) => seconds + frame.seconds, 0);
-	const parts = Math.max(Math.ceil(byteLength / maxBytes), Math.ceil(total / maxSeconds));
-	const framesPerPart = Math.ceil(frames.length / parts);
-	const starts = [{ offset: 0, seconds: 0 }];
-	let elapsed = 0;
-	let partFrames = 0;
-	let partSeconds = 0;
-	for (const frame of frames) {
-		if (
-			partFrames === framesPerPart ||
-			frame.offset + frame.length - starts[starts.length - 1].offset > maxBytes ||
-			partSeconds + frame.seconds > maxSeconds
-		) {
-			starts.push({ offset: frame.offset, seconds: elapsed });
-			partFrames = 0;
-			partSeconds = 0;
+	const count = frames.length;
+	// elapsed[i] is the length of frames [0, i). Summing durations drifts by a few ulps, so
+	// the time limit gets a microsecond of slack.
+	const elapsed = [0];
+	for (const frame of frames) elapsed.push(elapsed[elapsed.length - 1] + frame.seconds);
+	const startOf = (first: number) => (first === 0 ? 0 : frames[first].offset);
+	const endOf = (end: number) => (end === count ? byteLength : frames[end].offset);
+	const fits = (first: number, end: number) =>
+		elapsed[end] - elapsed[first] <= maxSeconds + 1e-6 &&
+		endOf(end) - startOf(first) <= maxBytes;
+	/** The end of the longest part that starts at `first` and fits, or one frame. */
+	const furthest = (first: number) => {
+		let [low, high] = [first + 1, count];
+		while (low < high) {
+			const middle = Math.ceil((low + high) / 2);
+			if (fits(first, middle)) low = middle;
+			else high = middle - 1;
 		}
-		partFrames++;
-		partSeconds += frame.seconds;
-		elapsed += frame.seconds;
+		return low;
+	};
+	/** The start of the longest part that ends at `end` and fits, or one frame. */
+	const earliest = (end: number) => {
+		let [low, high] = [0, end - 1];
+		while (low < high) {
+			const middle = Math.floor((low + high) / 2);
+			if (fits(middle, end)) high = middle;
+			else low = middle + 1;
+		}
+		return low;
+	};
+	// Filling each part as far as it fits gives the fewest parts.
+	let parts = 0;
+	for (let first = 0; first < count; first = furthest(first)) parts++;
+	// lowest[index] is the earliest frame part `index` may start at and still leave the parts
+	// after it able to reach the end.
+	const lowest: number[] = [];
+	for (let index = parts - 1, end = count; index > 0; index--) {
+		end = earliest(end);
+		lowest[index] = end;
 	}
-	return starts;
+	// Each cut aims at an equal share of the frames still to place, within what keeps this
+	// part and the ones after it fitting.
+	const firsts = [0];
+	for (let index = 1; index < parts; index++) {
+		const first = firsts[index - 1];
+		const share = first + Math.ceil((count - first) / (parts - index + 1));
+		firsts.push(Math.min(Math.max(share, lowest[index]), furthest(first)));
+	}
+	return firsts.map((first) => ({ offset: startOf(first), seconds: elapsed[first] }));
 }
 
 /**
- * The Layer III frames in `bytes`. A frame counts only when another frame or the
- * end of the buffer follows it, so sync-like bytes in a tag or cover art don't.
+ * The Layer III frames in `bytes`, skipping ID3v2 tags at the start or right after a frame or tag.
+ * A frame counts when it continues the frames before it, or when another frame or the end
+ * of the buffer follows it, so sync-like bytes in other metadata don't, and the last frame
+ * before trailing metadata does.
  */
 function mp3Frames(bytes: Uint8Array): Mp3Frame[] {
 	const frames: Mp3Frame[] = [];
 	let offset = 0;
+	// Where the last frame or tag ended, where the next tag may start.
+	let boundary = 0;
 	while (offset + 4 <= bytes.length) {
+		// An ID3v2 tag: "ID3", version, flags, then its size in 7 bits per byte, which leaves
+		// out the 10-byte header and the 10-byte footer that flag 0x10 adds.
+		const isTag =
+			bytes[offset] === 0x49 && bytes[offset + 1] === 0x44 && bytes[offset + 2] === 0x33;
+		if (isTag && offset === boundary) {
+			let size = 0;
+			for (let index = offset + 6; index < offset + 10; index++)
+				size = (size << 7) | (bytes[index] & 0x7f);
+			offset = boundary = offset + 10 + size + (bytes[offset + 5] & 0x10 ? 10 : 0);
+			continue;
+		}
 		const frame = mp3FrameAt(bytes, offset);
 		const next = frame ? offset + frame.length : 0;
-		if (frame && (next === bytes.length || mp3FrameAt(bytes, next))) {
+		const last = frames[frames.length - 1];
+		const continues = last !== undefined && last.offset + last.length === offset;
+		if (frame && (continues || next === bytes.length || mp3FrameAt(bytes, next))) {
 			frames.push(frame);
-			offset = next;
+			offset = boundary = next;
 		} else {
 			offset++;
 		}
@@ -164,13 +214,47 @@ function mp3FrameAt(bytes: Uint8Array, offset: number): Mp3Frame | undefined {
 	};
 }
 
-async function convertToWavParts(buffer: ArrayBuffer, maxBytes: number): Promise<AudioPart[]> {
+/**
+ * The audio's length from its metadata, or NaN when it has none, cannot be read within 5 s
+ * (a WebView may load no media it does not play), or the job is aborted.
+ */
+async function mediaSeconds(
+	buffer: ArrayBuffer,
+	type: string,
+	signal: AbortSignal | undefined,
+): Promise<number> {
+	if (typeof activeDocument === "undefined") return NaN;
+	const url = URL.createObjectURL(new Blob([buffer], { type }));
+	const audio = activeDocument.createElement("audio");
+	let timer = 0;
+	try {
+		return await new Promise<number>((resolve) => {
+			const unknown = () => resolve(NaN);
+			audio.onloadedmetadata = () => resolve(audio.duration);
+			audio.onerror = unknown;
+			signal?.addEventListener("abort", unknown, { once: true });
+			timer = window.setTimeout(unknown, 5000);
+			audio.preload = "metadata";
+			audio.src = url;
+		});
+	} finally {
+		window.clearTimeout(timer);
+		audio.removeAttribute("src");
+		URL.revokeObjectURL(url);
+	}
+}
+
+async function convertToWavParts(
+	buffer: ArrayBuffer,
+	maxBytes: number,
+	maxSeconds: number,
+): Promise<AudioPart[]> {
 	const audioContext = createAudioContext();
 	if (!audioContext) return [];
 
 	try {
 		const audioBuffer = await audioContext.decodeAudioData(buffer.slice(0));
-		return renderWavParts(audioBuffer, maxBytes);
+		return renderWavParts(audioBuffer, maxBytes, maxSeconds);
 	} catch (error) {
 		console.warn("Failed to convert audio buffer for transcription", error);
 		return [];
@@ -198,10 +282,20 @@ function createAudioContext(): AudioContext | null {
 	return new contextCtor();
 }
 
-function renderWavParts(audioBuffer: AudioBuffer, maxBytes: number): AudioPart[] {
+function renderWavParts(
+	audioBuffer: AudioBuffer,
+	maxBytes: number,
+	maxSeconds: number,
+): AudioPart[] {
 	const numChannels = audioBuffer.numberOfChannels;
 	const bytesPerFrame = numChannels * PCM_BYTES_PER_SAMPLE;
-	const maxSamplesPerPart = Math.max(1, Math.floor((maxBytes - WAV_HEADER_SIZE) / bytesPerFrame));
+	const maxSamplesPerPart = Math.max(
+		1,
+		Math.min(
+			Math.floor((maxBytes - WAV_HEADER_SIZE) / bytesPerFrame),
+			Math.floor(maxSeconds * audioBuffer.sampleRate),
+		),
+	);
 	const channelData = Array.from({ length: numChannels }, (_, channelIndex) =>
 		audioBuffer.getChannelData(channelIndex),
 	);

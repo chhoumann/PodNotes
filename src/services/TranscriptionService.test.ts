@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, onTestFinished, test, vi } from "vitest";
 import { Notice, type RequestUrlParam } from "obsidian";
 import { deferred, feedDocument, MemoryStorage } from "../../tests/mocks/feeds";
 import {
@@ -288,6 +288,57 @@ describe("TranscriptionService", () => {
 			await pending;
 			// Over OpenAI's size cap, so it would be decoded into WAV parts.
 			audioRequest.resolve({ buffer: new ArrayBuffer(24_000_001), extension: "ogg" });
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(decodes).toBe(0);
+		});
+
+		test("decodes no audio whose length its metadata gives after unload", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: new ArrayBuffer(4096),
+				extension: "m4a",
+			});
+			// Longer than OpenAI's length cap, so it would be decoded into WAV parts.
+			const duration = vi
+				.spyOn(HTMLMediaElement.prototype, "duration", "get")
+				.mockReturnValue(3000);
+			// The probe's element loads nothing until the test fires its metadata.
+			let probe: HTMLElement | undefined;
+			const createElement = document.createElement.bind(document);
+			const create = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+				const element = createElement(tag);
+				if (tag === "audio") probe = element;
+				return element;
+			});
+			const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+			Object.defineProperty(HTMLMediaElement.prototype, "src", { ...src, set() {} });
+			onTestFinished(() => {
+				duration.mockRestore();
+				create.mockRestore();
+				if (src) Object.defineProperty(HTMLMediaElement.prototype, "src", src);
+			});
+			let decodes = 0;
+			vi.stubGlobal(
+				"AudioContext",
+				class {
+					async decodeAudioData(): Promise<never> {
+						decodes++;
+						throw new Error("Unsupported codec");
+					}
+					async close(): Promise<void> {}
+				},
+			);
+			const service = new TranscriptionService(createMockPlugin());
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
+				}
+			).transcribeEpisode(audioJob);
+			await vi.waitFor(() => expect(probe).toBeDefined());
+
+			service.dispose();
+			probe?.dispatchEvent(new Event("loadedmetadata"));
+			await pending;
 			await new Promise((resolve) => setTimeout(resolve, 0));
 
 			expect(decodes).toBe(0);
@@ -920,6 +971,51 @@ describe("TranscriptionService", () => {
 			await transcribe(plugin, episode);
 
 			expectUpload("SIGNED-TOKEN", "cdn.example.com");
+		});
+
+		test.each([
+			[
+				"AWS",
+				"X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=CRED&X-Amz-Signature=SIGNED",
+			],
+			[
+				"Google Cloud",
+				"X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=CRED&X-Goog-Signature=SIGNED",
+			],
+			["CloudFront", "Expires=1900000000&Signature=SIGNED&Key-Pair-Id=CRED"],
+			["Azure", "sv=2024-11-04&se=2030-01-01&sp=r&sig=SIGNED"],
+			["Akamai query token", "hdnts=exp=1900000000~acl=/*~hmac=SIGNED"],
+			["Akamai cookie token", "hdnea=exp=1900000000~acl=/*~hmac=SIGNED"],
+		])(
+			"an episode whose address is a %s signed URL is uploaded, and no request holds the address",
+			async (_, query) => {
+				providerMock.mockImplementation(async () => Response.json(answers));
+				const episode: Episode = {
+					...mockEpisode,
+					streamUrl: `https://cdn.example.com/episode.mp3?${query}`,
+				};
+				const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+				await transcribe(plugin, episode);
+
+				expectUpload("SIGNED", "cdn.example.com");
+			},
+		);
+
+		test("a public episode whose address has tracking parameters goes by its address", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const streamUrl =
+				"https://cdn.example.com/episode.mp3?aid=rss_feed&feed=AbC123&updated=1700000000&utm_source=podcast";
+			const episode: Episode = { ...mockEpisode, streamUrl };
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+			await transcribe(plugin, episode);
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			const [request] = providerMock.mock.calls[0];
+			expect(JSON.parse(new TextDecoder().decode(sentBytes(request)))).toEqual({
+				url: streamUrl,
+			});
 		});
 
 		test("an episode on a private network is uploaded, and no request holds its address", async () => {
