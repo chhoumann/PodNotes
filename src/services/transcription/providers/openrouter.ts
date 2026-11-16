@@ -226,6 +226,8 @@ function parse(answer: unknown): PartTranscript {
 /** Tokens a word that matches no nearby token may be found again in, where the next words follow. */
 const RESYNC_TOKENS = 200;
 
+/** Letters and digits, with apostrophes and hyphens between them: a word that gains marks. */
+const PLAIN_WORD = /^[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*$/u;
 /** Opening quotes and brackets a word takes from the start of its token. */
 const LEADING = /^[“"‘'([¿¡「『《【（]+/u;
 /** Punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
@@ -295,14 +297,11 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		if (!start || !at) return word;
 		[t, o] = at;
 		const token = tokens[start[0]];
-		// Only a word that starts or ends with a letter or digit gains marks there, so one that
-		// already has a mark, a symbol or an emoji at that end keeps it and gains no second mark.
-		const lead =
-			start[1] === 0 && /^[\p{L}\p{N}]/u.test(word.text)
-				? (LEADING.exec(token)?.[0] ?? "")
-				: "";
-		const trail =
-			o === 0 && /[\p{L}\p{N}]$/u.test(word.text) ? (TRAILING.exec(token)?.[0] ?? "") : "";
+		// Only a plain word gains marks, so one with a mark, a symbol or an emoji anywhere keeps
+		// its text as given and gains no second mark.
+		const plain = PLAIN_WORD.test(word.text);
+		const lead = plain && start[1] === 0 ? (LEADING.exec(token)?.[0] ?? "") : "";
+		const trail = plain && o === 0 ? (TRAILING.exec(token)?.[0] ?? "") : "";
 		return { ...word, text: lead + word.text + trail };
 	});
 }
