@@ -1803,6 +1803,18 @@ describe("TranscriptionService", () => {
 					'"Hello world." (Next)',
 				],
 				[
+					"gives Qwen's words Chinese punctuation and dashes from its text",
+					"你好。 我们走吧！ Wait— really",
+					"你好 我们走吧 Wait really",
+					"你好。 我们走吧！ Wait— really",
+				],
+				[
+					"does not give a Qwen contraction the punctuation of a word spelled like it without the apostrophe",
+					"Well, we'll see. Okay.",
+					"we'll see Okay",
+					"we'll see. Okay.",
+				],
+				[
 					"restores punctuation to Qwen's words when one of them holds a decimal point",
 					"It rose 3.5 percent, then fell. Odd!",
 					"It rose 3.5 percent then fell Odd",
