@@ -295,10 +295,14 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		if (!start || !at) return word;
 		[t, o] = at;
 		const token = tokens[start[0]];
-		// A word that already starts or ends with such marks keeps them and gains no more.
+		// Only a word that starts or ends with a letter or digit gains marks there, so one that
+		// already has a mark, a symbol or an emoji at that end keeps it and gains no second mark.
 		const lead =
-			start[1] === 0 && !LEADING.test(word.text) ? (LEADING.exec(token)?.[0] ?? "") : "";
-		const trail = o === 0 && !TRAILING.test(word.text) ? (TRAILING.exec(token)?.[0] ?? "") : "";
+			start[1] === 0 && /^[\p{L}\p{N}]/u.test(word.text)
+				? (LEADING.exec(token)?.[0] ?? "")
+				: "";
+		const trail =
+			o === 0 && /[\p{L}\p{N}]$/u.test(word.text) ? (TRAILING.exec(token)?.[0] ?? "") : "";
 		return { ...word, text: lead + word.text + trail };
 	});
 }
