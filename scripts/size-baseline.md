@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 108,302 bytes and the raw budget 334,096. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 108,780 bytes, and the raw budget 333,342. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -34,95 +34,69 @@ main.js raw: 318989 bytes; budget 330000 bytes; 11011 bytes remaining
 main.js gzip (level 9): 103397 bytes; budget 104000 bytes; 603 bytes remaining
 ```
 
-On 2026-11-14 it rose from 104,000 for the transcription provider and model
-settings with ElevenLabs Scribe v3. The transcription engine had taken the
-branch to 103,795 bytes, and the settings, their migration and the ElevenLabs
-provider measured 866 more. The budget rose by those 866 bytes. With them:
+On 2026-11-14 it rose from 104,000 for issue #532: OpenAI diarization cuts
+MP3s into the fewest balanced chunks under 20 MB and 600 s, skipping ID3v2
+tags. With it:
 
 ```text
-main.js raw: 320988 bytes; budget 330000 bytes; 9012 bytes remaining
-main.js gzip (level 9): 104661 bytes; budget 104866 bytes; 205 bytes remaining
+main.js raw: 320267 bytes; budget 330000 bytes; 9733 bytes remaining
+main.js gzip (level 9): 104145 bytes; budget 104145 bytes; 0 bytes remaining
 ```
 
-On 2026-11-14 it rose again, from 104,866, for OpenRouter. The branch it builds
-on measured 104,706 bytes. The OpenRouter provider, its model catalog filter
-and the speaker label warnings measured 1,296 more. The budget rose by those
-1,296 bytes. With them:
+On 2026-11-14 it rose from 104,145 to 104,290 for the transcription engine,
+which measured 104,060 on its own. On top of it, 170 bytes measure audio in other
+formats against each model's length cap, for at most 5 s and only while the job
+runs, so a long `.m4a` under the size cap is split instead of sent whole, and 60
+keep a signed enclosure URL from going to a provider. With them:
 
 ```text
-main.js raw: 325002 bytes; budget 330000 bytes; 4998 bytes remaining
-main.js gzip (level 9): 106002 bytes; budget 106162 bytes; 160 bytes remaining
+main.js raw: 319405 bytes; budget 330000 bytes; 10595 bytes remaining
+main.js gzip (level 9): 104290 bytes; budget 104290 bytes; 0 bytes remaining
 ```
 
-Later on 2026-11-14 it rose from 106,162 for the speaker reel, which matches
-speaker labels across an episode's parts. The branch it builds on measured
-106,065 bytes. The reel and the label merge measured 808 more. The budget rose
-by those 808 bytes. With them:
-
-```text
-main.js raw: 327446 bytes; budget 330000 bytes; 2554 bytes remaining
-main.js gzip (level 9): 106873 bytes; budget 106970 bytes; 97 bytes remaining
-```
-
-Later on 2026-11-14 it rose from 106,970 for Voxtral Mini Transcribe 3 and
-Qwen3 ASR 1.7B on OpenRouter. The branch it builds on measured 106,873 bytes.
-The two models and the segment times Voxtral answers with measured 211 more.
-The budget rose by those 211 bytes. With them:
-
-```text
-main.js raw: 328174 bytes; budget 330000 bytes; 1826 bytes remaining
-main.js gzip (level 9): 107084 bytes; budget 107181 bytes; 97 bytes remaining
-```
-
-It then rose by 100 bytes for restoring Qwen3 ASR's punctuation from its text.
-With them:
-
-```text
-main.js raw: 328482 bytes; budget 330000 bytes; 1518 bytes remaining
-main.js gzip (level 9): 107184 bytes; budget 107281 bytes; 97 bytes remaining
-```
-
-Later on 2026-11-14 both budgets rose for the OpenAI-compatible server
-provider, the first rise of the raw budget. The branch it builds on measured
-327,446 raw and 106,873 gzip bytes. The provider, its settings rows, gate and
-failure sentences measured 3,293 raw and 895 gzip bytes more. Each budget rose
-by its delta, to 333,293 and 107,865, so the headroom stays as it was. With
+On 2026-11-16 it rose from 104,290 by 930 bytes for the transcription provider
+and model settings, their migration, and the ElevenLabs Scribe v3 provider. With
 them:
 
 ```text
-main.js raw: 330739 bytes; budget 333293 bytes; 2554 bytes remaining
-main.js gzip (level 9): 107768 bytes; budget 107865 bytes; 97 bytes remaining
+main.js raw: 322274 bytes; budget 330000 bytes; 7726 bytes remaining
+main.js gzip (level 9): 105220 bytes; budget 105220 bytes; 0 bytes remaining
 ```
 
-Both budgets then rose when the OpenAI-compatible branch merged the OpenRouter
-models' branch and was stacked on it. Apart, the two measured 107,768 and
-107,184 gzip bytes. Merged, they measured 331,775 raw and 108,094 gzip bytes.
-One verbose_json reader shared by both providers and a json fallback asked for
-once per job brought that to 331,542 and 108,060. Each budget is that plus the
-headroom kept above, 2,554 raw and 97 gzip bytes. With them:
+On 2026-11-16 it rose from 105,220 by 1,342 bytes for OpenRouter: the provider,
+its model catalog filter, the speaker label warnings, and uploading an episode
+the feed says is longer than the model takes by address. With them:
 
 ```text
-main.js raw: 331542 bytes; budget 334096 bytes; 2554 bytes remaining
-main.js gzip (level 9): 108060 bytes; budget 108157 bytes; 97 bytes remaining
+main.js raw: 326389 bytes; budget 330000 bytes; 3611 bytes remaining
+main.js gzip (level 9): 106562 bytes; budget 106562 bytes; 0 bytes remaining
 ```
 
-Joining Whisper's word pieces then brought gzip to 108,114 bytes, 43 under the
-budget. Words that find their punctuation in the answer's text again after a
-stretch the words leave out measured 298 raw and 125 gzip bytes more. The gzip
-budget rose by those 125 bytes, so its 43 bytes of headroom stay. With them:
+On 2026-11-16 it rose from 106,562 by 837 bytes for the speaker reel, which
+matches speaker labels across an episode's parts. With it:
 
 ```text
-main.js raw: 332075 bytes; budget 334096 bytes; 2021 bytes remaining
-main.js gzip (level 9): 108239 bytes; budget 108282 bytes; 43 bytes remaining
+main.js raw: 328677 bytes; budget 330000 bytes; 1323 bytes remaining
+main.js gzip (level 9): 107399 bytes; budget 107399 bytes; 0 bytes remaining
 ```
 
-A server address that carries a query, such as a token, keeps the query after
-the transcriptions path. That measured 36 raw and 20 gzip bytes more, and the
-gzip budget rose by those 20 bytes. With it:
+On 2026-11-16 it rose from 107,399 by 309 bytes for Voxtral Mini Transcribe 3
+and Qwen3 ASR on OpenRouter, with Qwen3 ASR's punctuation restored from its
+text. With them:
 
 ```text
-main.js raw: 332111 bytes; budget 334096 bytes; 1985 bytes remaining
-main.js gzip (level 9): 108259 bytes; budget 108302 bytes; 43 bytes remaining
+main.js raw: 329713 bytes; budget 330000 bytes; 287 bytes remaining
+main.js gzip (level 9): 107708 bytes; budget 107708 bytes; 0 bytes remaining
+```
+
+On 2026-11-16 both rose for the OpenAI-compatible server provider: from 330,000
+raw by 3,342 bytes, and from 107,708 gzip by 1,072 bytes. That is the provider, a
+verbose_json reader shared with OpenRouter, Whisper's word pieces joined, and
+punctuation found again in the answer's text. With it:
+
+```text
+main.js raw: 333342 bytes; budget 333342 bytes; 0 bytes remaining
+main.js gzip (level 9): 108780 bytes; budget 108780 bytes; 0 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
