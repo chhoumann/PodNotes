@@ -66,22 +66,22 @@ The first three models add speaker labels and timestamps, while **Voxtral Mini T
 | **OpenAI**<br>**GPT Transcribe** (recommended) | Plain text only (no speakers or timestamps) | Uploaded from your device | Split past 24 MB or 34.5 min | [API keys](https://platform.openai.com/api-keys), [pricing](https://openai.com/api/pricing/) |
 | **OpenAI-compatible server**<br>Any model ID your server offers | Timestamps when the server returns word or segment times, otherwise plain text. No speakers. | Uploaded from your device (stays on your machine with a local server) | Split past 24 MB | Optional bearer key, your own server or host's rates |
 
-A provider fetches an episode URL directly only when you added the podcast to PodNotes with a public feed address and that feed still lists the episode at a public `http` or `https` address without credentials or a signed-link token, such as an AWS, Google Cloud, Azure, or Akamai signature. For [private feeds](/private-feeds/), [downloads and local files](/local_files/), or an episode URL the provider cannot fetch, PodNotes downloads the audio on your device and uploads it instead.
+A provider fetches an episode URL directly only when you added the podcast to PodNotes with a public feed address and that feed still lists the episode at a public `http` or `https` address without credentials or a signed-link token, such as an AWS, Google Cloud, Azure, or Akamai signature. An episode you downloaded still goes by its address when its feed qualifies. For [private feeds](/private-feeds/), [local files](/local_files/), an episode the feed lists as longer than the model takes in one request, or an episode URL the provider cannot fetch, PodNotes reads or downloads the audio on your device and uploads it instead.
 
 ### OpenRouter models
 
 | Model | Speaker labels | Timestamps | Long episodes | Notes |
 | --- | --- | --- | --- | --- |
 | **Grok STT 2.0** (recommended) | Yes (`1`, `2`, `3`) | Word and segment | Splits uploads past 18 MB or 30 min, and matches MP3 voices across parts | Default OpenRouter model |
-| **ElevenLabs Scribe v2** | Yes (`1`, `2`, `3`) | Word | Fetches public episode URLs in one request when the feed lists the episode at 30 min or less. Longer episodes and uploads split past 18 MB or 30 min, and speaker numbers restart per part. | No device upload on public feeds |
-| **MAI-Transcribe 2** | Yes (`1`, `2`, `3`) | Word | Splits uploads past 18 MB or 30 min, and speaker numbers restart per part | Speaker-labeled alternative |
+| **ElevenLabs Scribe v2** | Yes (`1`, `2`, `3`) | Word | Fetches public episode URLs in one request when the feed lists the episode at 30 min or less. Longer episodes and uploads split past 18 MB or 30 min, and each part's speakers get new numbers. | No device upload on public feeds |
+| **MAI-Transcribe 2** | Yes (`1`, `2`, `3`) | Word | Splits uploads past 18 MB or 30 min, and each part's speakers get new numbers | Speaker-labeled alternative |
 | **Voxtral Mini Transcribe 3** | No | Segment | Splits uploads past 12 MB or 15 min | Plain transcript, timed by passage |
 | **Qwen3 ASR 1.7B** | No | Word (PodNotes restores punctuation from the response text) | Splits uploads past 12 MB or 15 min | Plain transcript at a low rate, see [model rates](https://openrouter.ai/models?output_modalities=transcription) |
 
-PodNotes checks OpenRouter's public transcription catalog at most once a day when you open settings or start a transcription, without sending your key:
+PodNotes reads OpenRouter's public transcription catalog when you open settings or start a transcription, without sending your key. It keeps a successful read in memory for a day, so it reads again after a day, after Obsidian restarts, or after a read that failed:
 
 - A model with a scheduled retirement date in the future shows that date in **Model**, such as `, ends 2027-06-01`.
-- If OpenRouter withdraws a model you selected earlier, **Model** marks it `, no longer offered`, and PodNotes falls back to **Grok STT 2.0** with a notice when you transcribe.
+- If OpenRouter withdraws a model you selected earlier, **Model** marks it `, no longer offered`, and PodNotes uses the first model OpenRouter still offers, normally **Grok STT 2.0**, with a notice when you transcribe.
 - If your [OpenRouter privacy settings](https://openrouter.ai/settings/privacy) block every route for a model, transcription stops with a notice asking you to change them or choose another model.
 
 ### API keys across devices and backups
