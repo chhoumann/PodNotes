@@ -94,7 +94,7 @@ When the feed publishes no transcript, the panel says "No transcript in this fee
 - Before the provider is set up on this device, a notice asks for the missing key, **Server address**, or **Model**. See [Choose a transcription provider](/transcription-providers/).
 - The result is a transcript note, which PodNotes opens. The panel shows only transcripts that feeds publish, so it does not show the note's lines.
 - Once the episode's transcript note exists, the panel offers **Open note** in place of the transcribe button, and also next to **Retry** when the transcript did not load.
-- Offline, the transcribe button and **Save as note** are turned off, and **Open note** still works.
+- Offline, the transcribe button and **Save as note** are turned off, and **Open note** still works. **Transcribe with your server** stays on, so a server on your computer can transcribe a local file without a connection.
 
 ### Up next
 
