@@ -2,7 +2,7 @@
 // be regenerated after any UI change. Run from the repo root:
 //
 //   npm run build && npm run start:e2e-obsidian
-//   node docs/scripts/screenshots.mjs
+//   node docs/scripts/screenshots.mjs [shot ...]
 //
 // It drives the instance with the verify skill's screens tooling
 // (.claude/skills/verify/screens): the fixture library seeds the podcasts, and
@@ -15,7 +15,13 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { connectCapture, videoToGif, withRecording, typeText } from "obsidian-e2e/capture";
+import {
+	connectCapture,
+	LINUX_SECRET_WARNING_CSS,
+	typeText,
+	videoToGif,
+	withRecording,
+} from "obsidian-e2e/capture";
 import sharp from "sharp";
 import {
 	evaluate,
@@ -36,9 +42,11 @@ import { jsLiteral } from "../../scripts/js-literal.mjs";
 
 const outDir = fileURLToPath(new URL("../public/screenshots", import.meta.url));
 const work = path.join(root, ".obsidian-e2e-artifacts", "docs-screenshots");
+const NET = fileURLToPath(new URL("../../.claude/skills/verify/net.mjs", import.meta.url));
 const THEMES = /** @type {const} */ (["light", "dark"]);
 const HERO = { width: 1440, height: 900, sidebar: 360 };
 const DEMO = { width: 1200, height: 900, sidebar: 360 };
+const SETTINGS_WINDOW = { width: 1120, height: 1080, sidebar: 360 };
 // Linux draws scrollbars that macOS hides until you scroll, and window buttons
 // that belong to the operating system, not to Obsidian.
 const CAPTURE_CSS = "::-webkit-scrollbar, .titlebar-button-container { display: none; }";
@@ -110,6 +118,9 @@ async function openFile(/** @type {string} */ file) {
 	);
 }
 
+const only = new Set(process.argv.slice(2));
+const wanted = (/** @type {string} */ name) => only.size === 0 || only.has(name);
+
 /**
  * Writes `<name>.webp` in light and `<name>-dark.webp` in dark. `rect` is a page
  * function, as source, that returns the crop in CSS px. `focus` keeps the editor
@@ -119,6 +130,7 @@ async function openFile(/** @type {string} */ file) {
  * @param {{ css?: string, focus?: boolean }} [options]
  */
 async function capture(name, rect, { css = "", focus = false } = {}) {
+	if (!wanted(name)) return;
 	fs.mkdirSync(work, { recursive: true });
 	for (const name_ of THEMES) {
 		await theme(name_);
@@ -170,6 +182,7 @@ async function webp(png, name, themeName) {
  * @param {string} [crop]
  */
 async function viewShot(name, text, crop) {
+	if (!wanted(name)) return;
 	fs.mkdirSync(work, { recursive: true });
 	for (const name_ of THEMES) {
 		await theme(name_);
@@ -239,11 +252,46 @@ const noteCrop = (/** @type {string} */ from, /** @type {string} */ to) => `() =
 	return { x: left, y: top, width: right - left, height: bottom - top };
 }`;
 const TITLE = `(blocks) => blocks.find((el) => el.matches(".inline-title"))`;
+const FIRST_LINE = `(blocks) => blocks.find((el) => el.matches(".cm-line") && el.textContent.trim())`;
 const CALLOUT = `(blocks) => blocks.find((el) => el.matches(".callout"))`;
 const NOTES_HEADING = `(blocks) => blocks.find((el) => el.textContent.trim() === "Notes")`;
 const LAST_LINE = `(blocks) => blocks.filter((el) => el.matches(".cm-line") && el.textContent.trim()).at(-1)`;
 const LAST_TIMESTAMP = `(blocks) => blocks.filter((el) => /\\d\\d:\\d\\d:\\d\\d/.test(el.textContent)).at(-1)`;
 const VIEWPORT = `() => ({ x: 0, y: 0, width: innerWidth, height: innerHeight })`;
+const TRANSCRIPT_GROUP = `[...app.setting.activeTab.containerEl.querySelectorAll(".setting-group")]
+	.find((el) => el.querySelector(".setting-item-heading")?.innerText.includes("Transcripts"))`;
+const TRANSCRIPT_SETTINGS = `() => {
+	const group = ${TRANSCRIPT_GROUP};
+	const box = group.getBoundingClientRect();
+	const pad = app.isMobile ? 12 : 16;
+	const x = Math.max(0, box.x - pad);
+	const right = Math.min(innerWidth, box.right + pad);
+	return { x, y: box.y - pad, width: right - x, height: box.height + pad * 2 };
+}`;
+const OPENROUTER_MODELS = `() => {
+	const group = ${TRANSCRIPT_GROUP};
+	const box = group.getBoundingClientRect();
+	const pad = app.isMobile ? 12 : 16;
+	const x = Math.max(0, box.x - pad);
+	const right = Math.min(innerWidth, box.right + pad);
+	const y = Math.max(0, box.y - pad);
+	const pathRow = [...group.querySelectorAll(".setting-item")]
+		.find((el) => el.querySelector(".setting-item-name")?.innerText === "Transcript path")
+		.getBoundingClientRect();
+	return { x, y, width: right - x, height: pathRow.bottom - y };
+}`;
+const OPENROUTER_MODELS_PHONE = `() => {
+	const group = ${TRANSCRIPT_GROUP};
+	const box = group.getBoundingClientRect();
+	const pad = 12;
+	const x = Math.max(0, box.x - pad);
+	const right = Math.min(innerWidth, box.right + pad);
+	const y = Math.max(0, box.y - pad);
+	const formatRow = [...group.querySelectorAll(".setting-item")]
+		.find((el) => el.querySelector(".setting-item-name")?.innerText === "Speaker label format")
+		.getBoundingClientRect();
+	return { x, y, width: right - x, height: formatRow.bottom + pad - y };
+}`;
 const BASES_TABLE = `() => {
 	const box = document.querySelector('.workspace-leaf-content[data-type="bases"]').getBoundingClientRect();
 	const rows = [...document.querySelectorAll('.workspace-leaf-content[data-type="bases"] .bases-tr')];
@@ -264,6 +312,226 @@ const DRAWER_PLAYER = `() => {
 // to a reader, so the note's shots hide them.
 const HIDE_ID_PROPERTIES =
 	'.metadata-property:is([data-property-key="guid" i], [data-property-key="feedurl" i]) { display: none; }';
+const SETTINGS_CAPTURE_CSS = `${LINUX_SECRET_WARNING_CSS} body:not(.is-mobile) .modal.mod-settings { height: 92vh !important; max-height: 92vh !important; } .modal-close-button, .modal-header-button, .modal.mod-settings .modal-header { visibility: hidden !important; }`;
+/** The example address and model the setup guide shows. The settings shots never contact them. */
+const EXAMPLE_SERVER_URL = "http://localhost:8000/v1";
+const EXAMPLE_SERVER_MODEL = "whisper-large-v3-turbo";
+
+/**
+ * Opens Settings -> PodNotes and scrolls the Transcripts group to the top.
+ * @param {"elevenlabs" | "openrouter" | "openai-compatible"} provider
+ * @param {string} [serverUrl]
+ */
+async function openTranscriptSettings(provider, serverUrl = "") {
+	const onServer = provider === "openai-compatible";
+	await evaluate(`
+		const plugin = app.plugins.plugins.podnotes;
+		app.secretStorage.setSecret("podnotes-elevenlabs-api-key", "sk-verify-fixture-not-real");
+		app.secretStorage.setSecret("podnotes-openrouter-api-key", "sk-verify-fixture-not-real");
+		plugin.settings.transcript.provider = ${jsLiteral(provider)};
+		plugin.settings.transcript.serverUrl = ${jsLiteral(onServer ? serverUrl : "")};
+		plugin.settings.transcript.model = ${jsLiteral(onServer ? EXAMPLE_SERVER_MODEL : "")};
+		plugin.settings.transcript.diarization.enabled = ${!onServer};
+		plugin.settings.elevenLabsSecretId = "podnotes-elevenlabs-api-key";
+		plugin.settings.openRouterSecretId = "podnotes-openrouter-api-key";
+		plugin.settings.openAICompatibleSecretId = "";
+		await plugin.saveSettings();
+		app.setting.close();
+		// Defer opening the tab past obsidian eval's synchronous console capture, then waitFor below checks the rendered DOM.
+		setTimeout(() => {
+			app.setting.open();
+			app.setting.openTabById("podnotes");
+		}, 0);
+		return true;
+	`);
+	await waitFor(
+		onServer
+			? `const group = ${TRANSCRIPT_GROUP};
+			if (!group) return false;
+			const items = [...group.querySelectorAll(".setting-item")];
+			const address = items
+				.find((el) => el.querySelector(".setting-item-name")?.innerText === "Server address")
+				?.querySelector("input");
+			const model = items
+				.find((el) => el.querySelector(".setting-item-name")?.innerText === "Model" && el.offsetParent !== null)
+				?.querySelector("input");
+			return address?.value === ${jsLiteral(serverUrl)} && model?.value === ${jsLiteral(EXAMPLE_SERVER_MODEL)};`
+			: `const group = ${TRANSCRIPT_GROUP};
+			if (!group) return false;
+			const model = [...group.querySelectorAll(".setting-item")]
+				.find((el) => el.querySelector(".setting-item-name")?.innerText === "Model" && el.offsetParent !== null)
+				?.querySelector("select.dropdown");
+			return Boolean(model) && (${jsLiteral(provider)} !== "openrouter" || model.options.length >= 6);`,
+		`The Transcripts settings for ${provider} did not render`,
+		10000,
+	);
+	await evaluate(`
+		const group = ${TRANSCRIPT_GROUP};
+		group.scrollIntoView({ block: "start" });
+		return true;
+	`);
+	await sleep(300);
+}
+
+/**
+ * Captures an open native `<select>` menu at 2x in both themes. Chromium draws a
+ * `<select>` popup in its own window outside `Page.captureScreenshot`, so this
+ * renders at 2x with Electron's zoom and grabs the window from X11 or macOS.
+ * @param {string} name @param {string} rowName @param {string} rect
+ * @param {{ width: number, height: number }} [windowSize]
+ */
+async function captureOpenSelect(name, rowName, rect, windowSize = SETTINGS_WINDOW) {
+	if (!wanted(name)) return;
+	fs.mkdirSync(work, { recursive: true });
+	const { width, height } = windowSize;
+	await cdp("Emulation.clearDeviceMetricsOverride");
+	await evaluate(`
+		const { remote, webFrame } = require("electron");
+		const win = remote.getCurrentWindow();
+		win.setPosition(80, 80);
+		win.setContentSize(${width * 2 + 2}, ${height * 2 + 2});
+		await new Promise((resolve) => setTimeout(resolve, 250));
+		win.setContentSize(${width * 2}, ${height * 2});
+		webFrame.setZoomFactor(2);
+		return true;
+	`);
+	await waitFor(
+		`return devicePixelRatio === 2 && innerWidth === ${width} && innerHeight === ${height};`,
+		"The window did not zoom to 2x for the select capture",
+		5000,
+	);
+	try {
+		for (const themeName of THEMES) {
+			await theme(themeName);
+			await openTranscriptSettings("openrouter");
+			const target = await evaluate(`
+				const { remote } = require("electron");
+				const win = remote.getCurrentWindow();
+				win.focus();
+				document.getElementById("docs-capture")?.remove();
+				document.head.createEl("style", { attr: { id: "docs-capture" },
+					text: ${jsLiteral(`${CAPTURE_CSS} .status-bar { display: none; } ${SETTINGS_CAPTURE_CSS}`)} });
+				document.querySelectorAll(".tooltip, .notice").forEach((el) => el.remove());
+				const group = ${TRANSCRIPT_GROUP};
+				const select = [...group.querySelectorAll(".setting-item")]
+					.find((el) => el.querySelector(".setting-item-name")?.innerText === ${jsLiteral(rowName)})
+					.querySelector("select.dropdown")
+					.getBoundingClientRect()
+					.toJSON();
+				return {
+					platform: process.platform,
+					display: process.env.DISPLAY ?? "",
+					xauthority: process.env.XAUTHORITY ?? "",
+					bounds: win.getContentBounds(),
+					select,
+					clip: (${rect})(),
+				};
+			`);
+			await sleep(400);
+			const clickX = Math.round(target.select.x + 24);
+			const clickY = Math.round(target.select.y + target.select.height / 2);
+			await cdp("Input.dispatchMouseEvent", {
+				type: "mousePressed",
+				x: clickX,
+				y: clickY,
+				button: "left",
+				buttons: 1,
+				clickCount: 1,
+			});
+			await cdp("Input.dispatchMouseEvent", {
+				type: "mouseReleased",
+				x: clickX,
+				y: clickY,
+				button: "left",
+				buttons: 0,
+				clickCount: 1,
+			});
+			await sleep(500);
+			const fullPng = path.join(work, `${name}-${themeName}-window.png`);
+			if (target.platform === "darwin") {
+				const { x, y, width: w, height: h } = target.bounds;
+				execFileSync("screencapture", ["-x", "-R", `${x},${y},${w},${h}`, fullPng]);
+			} else {
+				const { x, y, width: w, height: h } = target.bounds;
+				execFileSync(
+					"ffmpeg",
+					[
+						"-v",
+						"error",
+						"-y",
+						"-f",
+						"x11grab",
+						"-draw_mouse",
+						"0",
+						"-video_size",
+						`${w}x${h}`,
+						"-i",
+						`${target.display}+${x},${y}`,
+						"-frames:v",
+						"1",
+						fullPng,
+					],
+					{
+						env: {
+							...process.env,
+							DISPLAY: target.display,
+							...(target.xauthority && { XAUTHORITY: target.xauthority }),
+						},
+					},
+				);
+			}
+			await cdp("Input.dispatchKeyEvent", {
+				type: "keyDown",
+				key: "Escape",
+				code: "Escape",
+				windowsVirtualKeyCode: 27,
+			});
+			await cdp("Input.dispatchKeyEvent", {
+				type: "keyUp",
+				key: "Escape",
+				code: "Escape",
+				windowsVirtualKeyCode: 27,
+			});
+			const [left, top, cropW, cropH] = ["x", "y", "width", "height"].map(
+				(key) => Math.round(target.clip[key]) * 2,
+			);
+			const png = path.join(work, `${name}-${themeName}.png`);
+			await sharp(fullPng).extract({ left, top, width: cropW, height: cropH }).toFile(png);
+			await webp(png, name, themeName);
+		}
+	} finally {
+		await evaluate(`
+			require("electron").webFrame.setZoomFactor(1);
+			document.getElementById("docs-capture")?.remove();
+			return true;
+		`);
+	}
+}
+
+/** Transcribes `item` through the fixture provider and returns the opened note's path. */
+async function transcribeEpisode(/** @type {{ title: string, podcastName: string }} */ item) {
+	await evaluate(`
+		const plugin = app.plugins.plugins.podnotes;
+		app.secretStorage.setSecret("podnotes-elevenlabs-api-key", "sk-verify-fixture-not-real");
+		plugin.settings.transcript.provider = "elevenlabs";
+		plugin.settings.transcript.model = "";
+		plugin.settings.transcript.diarization.enabled = true;
+		plugin.settings.elevenLabsSecretId = "podnotes-elevenlabs-api-key";
+		await plugin.saveSettings();
+		const existing = app.vault.getAbstractFileByPath("transcripts");
+		if (existing) await app.vault.delete(existing, true);
+		return true;
+	`);
+	await load(item);
+	const before = await evaluate(`return app.workspace.getActiveFile()?.path ?? null;`);
+	await evaluate(`app.commands.executeCommandById("podnotes:podnotes-transcribe"); return true;`);
+	await waitFor(
+		`const file = app.workspace.getActiveFile()?.path;
+		return Boolean(file) && file !== ${jsLiteral(before)} && file.startsWith("transcripts/");`,
+		`The transcript note for ${item.title} did not open`,
+	);
+	return evaluate(`return app.workspace.getActiveFile().path;`);
+}
 
 /** Replaces the instance vault's files with docs/screenshots/vault and sets up Obsidian for it. */
 async function prepareVault() {
@@ -277,6 +545,7 @@ async function prepareVault() {
 	);
 	fs.cpSync(path.join(seedDir, "vault"), provision.vaultPath, { recursive: true });
 	await evaluate(`
+		app.setting.close();
 		for (const id of ["file-explorer", "command-palette", "properties", "bases", "page-preview", "outline", "word-count"]) {
 			const plugin = app.internalPlugins.getPluginById(id);
 			if (plugin && !plugin.enabled) await plugin.enable(true);
@@ -502,10 +771,12 @@ async function main() {
 	await capture("hero", VIEWPORT, {
 		css: ".workspace-sidedock-vault-profile { visibility: hidden; }",
 	});
-	await sharp(path.join(work, "hero-light.png"))
-		.resize(1200, 630, { fit: "cover", position: "top" })
-		.png({ compressionLevel: 9, palette: true })
-		.toFile(path.join(outDir, "og.png"));
+	if (wanted("hero")) {
+		await sharp(path.join(work, "hero-light.png"))
+			.resize(1200, 630, { fit: "cover", position: "top" })
+			.png({ compressionLevel: 9, palette: true })
+			.toFile(path.join(outDir, "og.png"));
+	}
 	await scrollNote("## Notes");
 	await capture("timestamps", noteCrop(NOTES_HEADING, LAST_LINE));
 	await scrollNote("");
@@ -516,13 +787,72 @@ async function main() {
 	await capture("bases", BASES_TABLE);
 	await evaluate("app.workspace.rightSplit.expand(); return true;");
 
-	await desktop(DEMO);
-	await show({ kind: "library" }, true);
-	await openFile(heroNote);
-	for (const name of THEMES) await recordDemo(heroNote, name);
-	await playback(hero.playAt);
+	if (wanted("demo")) {
+		await desktop(DEMO);
+		await show({ kind: "library" }, true);
+		await openFile(heroNote);
+		for (const name of THEMES) await recordDemo(heroNote, name);
+		await playback(hero.playAt);
+	}
 
-	// Obsidian's phone layout.
+	// Transcript settings, OpenRouter's model menu, OpenAI-compatible server, and a saved transcript note.
+	const watchNet = () =>
+		execFileSync(
+			process.execPath,
+			[NET, "watch", "--turns", JSON.stringify(plan.transcript.turns)],
+			{ stdio: "inherit" },
+		);
+	watchNet();
+	await desktop(SETTINGS_WINDOW);
+	await openTranscriptSettings("elevenlabs");
+	await capture("transcript-settings", TRANSCRIPT_SETTINGS, { css: SETTINGS_CAPTURE_CSS });
+	await openTranscriptSettings("openai-compatible", EXAMPLE_SERVER_URL);
+	await capture("openai-compatible-settings", TRANSCRIPT_SETTINGS, { css: SETTINGS_CAPTURE_CSS });
+	await captureOpenSelect("openrouter-models", "Model", OPENROUTER_MODELS);
+	await evaluate(`app.setting.close(); return true;`);
+	await evaluate("app.plugins.plugins.podnotes.setAutoQueue(false); return true;");
+	const transcriptNote = await transcribeEpisode(
+		episode(lib, plan.transcript.podcast, plan.transcript.title),
+	);
+	await desktop(HERO);
+	await openFile(transcriptNote);
+	await scrollNote("");
+	await capture("transcript-note", noteCrop(FIRST_LINE, LAST_LINE), {
+		css: ".inline-title { display: none; }",
+	});
+	await load(episode(lib, hero.podcast, hero.title));
+	await playback(hero.playAt);
+	await evaluate("app.plugins.plugins.podnotes.setAutoQueue(true); return true;");
+
+	// Obsidian's phone layout. `place("phone")` reloads the window, so re-install the network mock.
+	await place("phone");
+	watchNet();
+	await cdp("Emulation.setDeviceMetricsOverride", {
+		width: 390,
+		height: 1200,
+		deviceScaleFactor: 2,
+		mobile: true,
+		screenWidth: 390,
+		screenHeight: 1200,
+	});
+	await waitFor(
+		`return innerHeight === 1200 && devicePixelRatio === 2;`,
+		"The phone window did not grow for transcript settings",
+		5000,
+	);
+	await openTranscriptSettings("elevenlabs");
+	await capture("transcript-settings-phone", TRANSCRIPT_SETTINGS, { css: SETTINGS_CAPTURE_CSS });
+	await openTranscriptSettings("openrouter");
+	await capture("openrouter-models-phone", OPENROUTER_MODELS_PHONE, {
+		css: SETTINGS_CAPTURE_CSS,
+	});
+	await openTranscriptSettings("openai-compatible", EXAMPLE_SERVER_URL);
+	await capture("openai-compatible-settings-phone", TRANSCRIPT_SETTINGS, {
+		css: SETTINGS_CAPTURE_CSS,
+	});
+	await evaluate(`app.setting.close(); return true;`);
+	execFileSync(process.execPath, [NET, "unwatch"], { stdio: "inherit" });
+
 	await place("phone");
 	await hiDpi();
 	await openFile(heroNote);
@@ -549,6 +879,16 @@ async function main() {
 			focus: true,
 		},
 	);
+	await openFile(transcriptNote);
+	await scrollNote("");
+	await capture("transcript-note-phone", noteCrop(FIRST_LINE, LAST_LINE), {
+		css: ".inline-title { display: none; } .is-mobile .view-header { visibility: hidden !important; }",
+	});
+	await evaluate(`
+		const folder = app.vault.getAbstractFileByPath("transcripts");
+		if (folder) await app.vault.delete(folder, true);
+		return true;
+	`);
 	await openFile("PodNotes/Episodes.base");
 	await sleep(1500);
 	await capture("bases-phone", BASES_TABLE);
@@ -567,6 +907,11 @@ async function main() {
 	await capture("transcript-phone", DRAWER_PLAYER);
 
 	// A new install: the empty library.
+	await evaluate(`
+		app.secretStorage.setSecret("podnotes-elevenlabs-api-key", "");
+		app.secretStorage.setSecret("podnotes-openrouter-api-key", "");
+		return true;
+	`);
 	await seed("empty");
 	await place("sidebar");
 	await hiDpi();
