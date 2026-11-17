@@ -48,6 +48,7 @@ root symlinks for local Obsidian loading.
 - `npm run test:tooling`: run the real-process Svelte checker failure tests and the build's syntax floor test, including rejection of tagged templates that disable Obsidian's eval cache. CI runs these separately on every PR.
 - `npm run build`: type-check and produce the production plugin bundle.
 - `npm run plant -- <test name> <file> <search> <replace> [<file> <search> <replace>...] [-- <command...>]`: plant a defect and pass only when the exactly named test fails on it and the command passes again once restored. Each search must match exactly once, and the plant must type-check. The files are restored on exit or interrupt. The command defaults to the unit suite filtered to the test name.
+- `npm run review:models`: compare the curated transcription models in `src/services/transcription/providers/` with OpenRouter's public catalog, report models that are gone, ending, newer in a curated family, or not curated, and exit 1 when a curated OpenRouter model is gone or past its end date. The `Model review` workflow runs it weekly and keeps one `model-review` issue current. It is not a required check.
 - `npm run docs:build`: build the Starlight documentation and check its internal links.
 
 `@typescript/native` aliases TypeScript 7. `typecheck` and `lint:tsconfig` call
@@ -62,7 +63,7 @@ svelte-check's native API path passes when a tsconfig matches no files, which
 `check:a11y` in temporary workspaces and requires it to fail on that case and
 when the native compiler cannot start.
 
-After `npm run build`, `npm run size` enforces 334,096 raw bytes and 108,157 gzip bytes at level 9 for root `main.js` in the Test workflow's Build and sizes worker. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
+After `npm run build`, `npm run size` enforces 334,091 raw bytes and 109,234 gzip bytes at level 9 for root `main.js` in the Test workflow's Build and sizes worker. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
 
 Before opening a PR or cutting a release, run the CI-equivalent checks locally:
 
@@ -402,7 +403,8 @@ The `Test`, `Documentation`, `PR Title`, `Dependency Review`, and `Platforms`
 workflows have no `concurrency` block. Do not add one: a group cancels a
 pending run when a newer run joins it, even with `cancel-in-progress: false`,
 and a cancelled run on a PR head turns its check rollup to `FAILURE`. Duplicate
-runs on one head, such as after a reopen, must all finish.
+runs on one head, such as after a reopen, must all finish. `Model review` is no
+PR check and has one, so two runs cannot each open a `model-review` issue.
 
 Recovery is for the owner. Agents never dispatch release workflows. The release
 stage accepts only the refs below, re-derives and re-verifies the release commit

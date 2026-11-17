@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, onTestFinished, test, vi } from "vitest";
 import { Notice, type RequestUrlParam } from "obsidian";
 import { deferred, feedDocument, MemoryStorage } from "../../tests/mocks/feeds";
 import {
@@ -288,6 +288,57 @@ describe("TranscriptionService", () => {
 			await pending;
 			// Over OpenAI's size cap, so it would be decoded into WAV parts.
 			audioRequest.resolve({ buffer: new ArrayBuffer(24_000_001), extension: "ogg" });
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(decodes).toBe(0);
+		});
+
+		test("decodes no audio whose length its metadata gives after unload", async () => {
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: new ArrayBuffer(4096),
+				extension: "m4a",
+			});
+			// Longer than OpenAI's length cap, so it would be decoded into WAV parts.
+			const duration = vi
+				.spyOn(HTMLMediaElement.prototype, "duration", "get")
+				.mockReturnValue(3000);
+			// The probe's element loads nothing until the test fires its metadata.
+			let probe: HTMLElement | undefined;
+			const createElement = document.createElement.bind(document);
+			const create = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+				const element = createElement(tag);
+				if (tag === "audio") probe = element;
+				return element;
+			});
+			const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+			Object.defineProperty(HTMLMediaElement.prototype, "src", { ...src, set() {} });
+			onTestFinished(() => {
+				duration.mockRestore();
+				create.mockRestore();
+				if (src) Object.defineProperty(HTMLMediaElement.prototype, "src", src);
+			});
+			let decodes = 0;
+			vi.stubGlobal(
+				"AudioContext",
+				class {
+					async decodeAudioData(): Promise<never> {
+						decodes++;
+						throw new Error("Unsupported codec");
+					}
+					async close(): Promise<void> {}
+				},
+			);
+			const service = new TranscriptionService(createMockPlugin());
+			const pending = (
+				service as unknown as {
+					transcribeEpisode: (job: AudioJob) => Promise<void>;
+				}
+			).transcribeEpisode(audioJob);
+			await vi.waitFor(() => expect(probe).toBeDefined());
+
+			service.dispose();
+			probe?.dispatchEvent(new Event("loadedmetadata"));
+			await pending;
 			await new Promise((resolve) => setTimeout(resolve, 0));
 
 			expect(decodes).toBe(0);
@@ -922,6 +973,51 @@ describe("TranscriptionService", () => {
 			expectUpload("SIGNED-TOKEN", "cdn.example.com");
 		});
 
+		test.each([
+			[
+				"AWS",
+				"X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=CRED&X-Amz-Signature=SIGNED",
+			],
+			[
+				"Google Cloud",
+				"X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=CRED&X-Goog-Signature=SIGNED",
+			],
+			["CloudFront", "Expires=1900000000&Signature=SIGNED&Key-Pair-Id=CRED"],
+			["Azure", "sv=2024-11-04&se=2030-01-01&sp=r&sig=SIGNED"],
+			["Akamai query token", "hdnts=exp=1900000000~acl=/*~hmac=SIGNED"],
+			["Akamai cookie token", "hdnea=exp=1900000000~acl=/*~hmac=SIGNED"],
+		])(
+			"an episode whose address is a %s signed URL is uploaded, and no request holds the address",
+			async (_, query) => {
+				providerMock.mockImplementation(async () => Response.json(answers));
+				const episode: Episode = {
+					...mockEpisode,
+					streamUrl: `https://cdn.example.com/episode.mp3?${query}`,
+				};
+				const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+				await transcribe(plugin, episode);
+
+				expectUpload("SIGNED", "cdn.example.com");
+			},
+		);
+
+		test("a public episode whose address has tracking parameters goes by its address", async () => {
+			providerMock.mockImplementation(async () => Response.json(answers));
+			const streamUrl =
+				"https://cdn.example.com/episode.mp3?aid=rss_feed&feed=AbC123&updated=1700000000&utm_source=podcast";
+			const episode: Episode = { ...mockEpisode, streamUrl };
+			const plugin = useDeepgram(savedFeedRepository(publicFeed, [episode]));
+
+			await transcribe(plugin, episode);
+
+			expect(getEpisodeAudioBufferMock).not.toHaveBeenCalled();
+			const [request] = providerMock.mock.calls[0];
+			expect(JSON.parse(new TextDecoder().decode(sentBytes(request)))).toEqual({
+				url: streamUrl,
+			});
+		});
+
 		test("an episode on a private network is uploaded, and no request holds its address", async () => {
 			providerMock.mockImplementation(async () => Response.json(answers));
 			const episode: Episode = {
@@ -1448,6 +1544,30 @@ describe("TranscriptionService", () => {
 			expect(savedNote(plugin)).toBe(labeled);
 		});
 
+		test.each([
+			[1800, "by its address", true],
+			[1801, "in parts it uploads", false],
+		])(
+			"Scribe v2 takes a public episode the feed says lasts %i s %s",
+			async (duration, _, byAddress) => {
+				openRouter();
+				const episode: Episode = { ...mockEpisode, duration };
+				const plugin = useOpenRouter({
+					model: "elevenlabs/scribe-v2",
+					feeds: savedFeedRepository(publicFeed, [episode]),
+				});
+
+				await expect(finalNotice(plugin, episode)).resolves.toBe(
+					"Transcription completed and saved.",
+				);
+
+				expect(sent().map(({ contentType }) => contentType === "application/json")).toEqual(
+					[byAddress],
+				);
+				expect(getEpisodeAudioBufferMock).toHaveBeenCalledTimes(byAddress ? 0 : 1);
+			},
+		);
+
 		test("a 40 MB episode goes in parts of at most 18 MB and 1,800 s, one at a time, timed to the millisecond from the episode's start", async () => {
 			const stream = MP3_STREAMS.mpeg1At96Kbps;
 			const frames = Math.ceil(40_000_000 / stream.frameBytes);
@@ -1570,6 +1690,201 @@ describe("TranscriptionService", () => {
 				);
 				expect(savedNote(plugin)).toBe(
 					`# Test Episode\n\n[00:00:01](${link("1.2")}) Hello there. Uh, it's re running now.\n\n[00:00:10](${link("10.16")}) Hi!`,
+				);
+			});
+
+			test("Qwen's words keep taking punctuation from its text after a long stretch the words leave out", async () => {
+				const said = "so we kept re running it Then it was running".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Um, uh, you know, like, I mean, honestly, okay, right, well, look, so we kept re-running it. Then it was running. Hi!",
+						words: [
+							...said.map((word, index) => ({
+								word,
+								start: 1.2 + index / 5,
+								end: 1.4 + index / 5,
+							})),
+							{ word: "Hi", start: 10.16, end: 10.5 },
+						],
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1.2")}) so we kept re running it. Then it was running.\n\n` +
+						`[00:00:10](${link("10.16")}) Hi!`,
+				);
+			});
+
+			test("Qwen's words split from one token of its text take its punctuation in place, not from where the pair comes again", async () => {
+				const said = "Short term challenges remain Later short term we adapt".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Short-term challenges remain. Later, short term, we adapt.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) Short term challenges remain. Later, short term, we adapt.`,
+				);
+			});
+
+			test("the last of the Qwen words split from one token of its text takes that token's punctuation", async () => {
+				const said = "It was short term Then we left".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "It was short-term. Then we left.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) It was short term. Then we left.`,
+				);
+			});
+
+			test("a Qwen word its text says differently is not matched to a later token the next words do not follow", async () => {
+				// The words say "And" where the text says "So", and "And" comes later, before "so".
+				const said = "Right And the answer is yes And so the answer is no".split(" ");
+				openRouter(() =>
+					Response.json({
+						text: "Right. So the answer is yes. And so, the answer is no.",
+						words: said.map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) Right. And the answer is yes. And so, the answer is no.`,
+				);
+			});
+
+			test.each([
+				[
+					"keeps every Qwen word as given when one has a symbol, an emoji, a quote or an end apostrophe",
+					"Use C for systems. Hello, 1️⃣world! Say 'Hello world' about dogs. Done.",
+					"Use C++ for systems Hello 1️⃣,world Say' Hello world about dogs’ Done",
+					"Use C++ for systems Hello 1️⃣,world Say' Hello world about dogs’ Done",
+				],
+				[
+					"restores single quotes around Qwen's words",
+					"'Hello world.' It's done. Next.",
+					"Hello world It's done Next",
+					"'Hello world.' It's done. Next.",
+				],
+				[
+					"adds no second quote or period to Qwen's words that already have them",
+					'"Hello world." (Next)',
+					'"Hello world." (Next)',
+					'"Hello world." (Next)',
+				],
+				[
+					"gives Qwen's words Chinese punctuation and dashes from its text",
+					"你好。我们走吧！「好」 Wait— really",
+					"你好 我们走吧 好 Wait really",
+					"你好。 我们走吧！ 「好」 Wait— really",
+				],
+				[
+					"keeps a run of Chinese marks together on one Qwen word",
+					"「你好。」我们走吧！！",
+					"你好 我们走吧",
+					"「你好。」 我们走吧！！",
+				],
+				[
+					"restores punctuation to Qwen's words with combining marks, as in Hindi",
+					"Un cafe\u0301, merci. नमस्ते दुनिया। फिर मिलेंगे?",
+					"Un cafe\u0301 merci नमस्ते दुनिया फिर मिलेंगे",
+					"Un cafe\u0301, merci. नमस्ते दुनिया। फिर मिलेंगे?",
+				],
+				[
+					"does not give a Qwen contraction the punctuation of a word spelled like it without the apostrophe",
+					"Well, we'll see. Okay.",
+					"we'll see Okay",
+					"we'll see. Okay.",
+				],
+				[
+					"adds nothing to Qwen's words when it lists quotes as entries of their own",
+					'"Hello world." Next!',
+					'" Hello world " Next',
+					'" Hello world " Next',
+				],
+				[
+					"adds nothing to Qwen's words when one starts with a mark the word before could take",
+					'Hello, world! Hi… Next. 你好。再见 Say "yes" now',
+					'Hello ,world Hi …Next 你好 。再见 Say" yes now',
+					'Hello ,world Hi …Next 你好 。再见 Say" yes now',
+				],
+				[
+					"adds nothing to Qwen's words when it lists a semicolon as an entry of its own",
+					"Hello world; Next!",
+					"Hello world ; Next",
+					"Hello world ; Next",
+				],
+				[
+					"adds nothing to Qwen's words when one already has punctuation before an emoji",
+					"Hello world. Next!",
+					"Hello world.🙂 Next",
+					"Hello world.🙂 Next",
+				],
+				[
+					"keeps every Qwen word as given when one has a comma or colon between letters",
+					"Hello, world again! Helloworld, next. Time: now.",
+					"Hello world,again Hello,world next Time:now",
+					"Hello world,again Hello,world next Time:now",
+				],
+				[
+					"restores punctuation after Qwen's numbers, amounts, times and percentages",
+					"It rose 3.5, then $5 at 3:30. Then 5%. Of 1,000! Then -3.",
+					"It rose 3.5 then $5 at 3:30 Then 5% Of 1,000 Then 3",
+					// The note escapes "$" and "%", which start math and comments in Obsidian.
+					"It rose 3.5, then \\$5 at 3:30. Then 5\\%. Of 1,000! Then 3.",
+				],
+				[
+					"restores punctuation to Qwen's words when one of them holds a decimal point",
+					"It rose 3.5 percent, then fell. Odd!",
+					"It rose 3.5 percent then fell Odd",
+					"It rose 3.5 percent, then fell. Odd!",
+				],
+			])("%s", async (_, text, said, note) => {
+				openRouter(() =>
+					Response.json({
+						text,
+						words: said.split(" ").map((word, index) => ({
+							word,
+							start: 1 + index / 5,
+							end: 1.2 + index / 5,
+						})),
+					}),
+				);
+				const plugin = useOpenRouter({ model: QWEN, speakers: false });
+
+				await transcribe(plugin);
+
+				expect(savedNote(plugin)).toBe(
+					`# Test Episode\n\n[00:00:01](${link("1")}) ${note}`,
 				);
 			});
 
@@ -1699,11 +2014,11 @@ describe("TranscriptionService", () => {
 				return { words };
 			};
 			/** OpenRouter answering each request as `heard` does, and the reel with `reel` when given. */
-			const hearing = (reel?: () => Response) =>
+			const hearing = (reel?: (frames: readonly Frame[]) => Response) =>
 				openRouter(async (request) => {
 					const frames = framesOf(await sentAudio(request));
 					const isReel = frames.length * stream.frameSeconds < 60;
-					return isReel && reel ? reel() : Response.json(heard(frames));
+					return isReel && reel ? reel(frames) : Response.json(heard(frames));
 				});
 			const spoken = (note: string) =>
 				[...note.matchAll(/\*\*(\d+):\*\* (\w+)/g)].map(([, n, text]) => `${n} ${text}`);
@@ -1768,7 +2083,54 @@ describe("TranscriptionService", () => {
 				);
 			});
 
-			test("a voice whose turns are all under 2.6 s gets no clip and keeps its own number", async () => {
+			test("a voice's clip comes from its speech, not from a silence between two of its words", async () => {
+				// Ann says one 0.216 s word, is silent for 29.808 s, then talks for 5.04 s. One turn
+				// across the silence would clip 9 s of it from 0.2 s in.
+				getEpisodeAudioBufferMock.mockResolvedValue(
+					episode([
+						{ voice: ANN, from: 0, to: 3 },
+						{ voice: ANN, from: 417, to: 487 },
+						{ voice: BOB, from: 487, to: 904 },
+						{ voice: BOB, from: 22_500, to: 22_917 },
+						{ voice: ANN, from: 22_917, to: 23_334 },
+					]),
+				);
+				hearing();
+				const plugin = grok();
+
+				const notice = await finalNotice(plugin);
+
+				const labels = spoken(savedNote(plugin));
+				expect(new Set(labels.filter((label) => label.endsWith("Ann")))).toEqual(
+					new Set(["1 Ann"]),
+				);
+				expect(new Set(labels.filter((label) => label.endsWith("Bob")))).toEqual(
+					new Set(["2 Bob"]),
+				);
+				expect(notice).toBe("Transcription completed and saved.");
+			});
+
+			test("short pauses between a voice's words keep them one turn, long enough for a clip", async () => {
+				// Every voice talks in words of 1.008 s with 0.288 s between them.
+				const words = (voice: number, from: number, to: number) =>
+					Array.from({ length: Math.floor((to - from) / 18) }, (_, n) => ({
+						voice,
+						from: from + n * 18,
+						to: from + n * 18 + 14,
+					}));
+				getEpisodeAudioBufferMock.mockResolvedValue(
+					episode(TURNS.flatMap(({ voice, from, to }) => words(voice, from, to))),
+				);
+				hearing();
+				const plugin = grok();
+
+				const notice = await finalNotice(plugin);
+
+				expect(notice).toBe("Transcription completed and saved.");
+				expect(sent()).toHaveLength(3);
+			});
+
+			test("a voice whose turns are all under 2.6 s gets no clip, keeps its own number, and the notice says labels restart in each", async () => {
 				// Cy speaks 2.016 s, after Ann in the second part.
 				getEpisodeAudioBufferMock.mockResolvedValue(
 					episode([...TURNS, { voice: CY, from: 23_334, to: 23_362 }]),
@@ -1785,12 +2147,39 @@ describe("TranscriptionService", () => {
 					"1 Ann",
 					"3 Cy",
 				]);
-				expect(notice).toBe("Transcription completed and saved.");
+				expect(notice).toBe(RESTART);
 				expect(sent()).toHaveLength(3);
 				const reelVoices = framesOf(await sentAudio(sent()[2])).map((frame) =>
 					frame === "silence" ? 0 : frame.voice,
 				);
 				expect(new Set(reelVoices)).toEqual(new Set([0, ANN, BOB]));
+			});
+
+			test("a clip the reel answer gives no words keeps its own number, though one speaker talks in the clips on both sides of it", async () => {
+				// Clips go most talk first: Ann in the first part, Cy, then Ann in the second.
+				getEpisodeAudioBufferMock.mockResolvedValue(
+					episode([
+						{ voice: ANN, from: 0, to: 417 },
+						{ voice: CY, from: 22_500, to: 22_778 },
+						{ voice: ANN, from: 22_778, to: 22_917 },
+					]),
+				);
+				hearing((frames) =>
+					Response.json(
+						heard(
+							frames.map((frame) =>
+								frame !== "silence" && frame.voice === CY ? "silence" : frame,
+							),
+						),
+					),
+				);
+				const plugin = grok();
+
+				const notice = await finalNotice(plugin);
+
+				expect(sent()).toHaveLength(3);
+				expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Cy", "1 Ann"]);
+				expect(notice).toBe(RESTART);
 			});
 
 			test("a reel OpenRouter refuses keeps the parts' labels, saves the note and says labels restart", async () => {
@@ -2123,6 +2512,20 @@ describe("TranscriptionService", () => {
 		});
 
 		test.each([
+			"https://example.test/v1?api_key=a%2Fb&x=1",
+			"https://example.test/v1/?api_key=a%2Fb&x=1",
+			"https://example.test/v1/audio/transcriptions?api_key=a%2Fb&x=1",
+		])("the address %j keeps its query after the transcriptions path", async (serverUrl) => {
+			providerMock.mockImplementation(async () => Response.json(verbose));
+
+			await transcribe(useServer({ serverUrl }));
+
+			expect(providerMock.mock.calls.map(([request]) => request.url)).toEqual([
+				"https://example.test/v1/audio/transcriptions?api_key=a%2Fb&x=1",
+			]);
+		});
+
+		test.each([
 			"http://localhost:8000/v1",
 			"http://127.0.0.1:8080/v1",
 			"http://192.168.1.20:9000/v1",
@@ -2193,6 +2596,54 @@ describe("TranscriptionService", () => {
 			expect(sizes[1] + sizes[2]).toBe(frames * stream.frameBytes);
 		});
 
+		test("a part with no speech keeps the episode's other parts timed", async () => {
+			const plugin = useServer();
+			const stream = MP3_STREAMS.mpeg1At96Kbps;
+			getEpisodeAudioBufferMock.mockResolvedValue({
+				buffer: mp3Bytes(stream, Math.ceil(30_000_000 / stream.frameBytes)).buffer,
+				extension: "mp3",
+			});
+			let part = 0;
+			providerMock.mockImplementation(async () =>
+				part++ === 0
+					? Response.json({ task: "transcribe", text: "", words: [], segments: [] })
+					: Response.json(verbose),
+			);
+
+			await transcribe(plugin);
+
+			expect(part).toBe(2);
+			expect(savedNote(plugin)).toMatch(/^\[\d\d:\d\d:\d\d\]\(obsidian:\/\/podnotes/m);
+		});
+
+		test("a verbose_json answer with text and no times keeps its text", async () => {
+			providerMock.mockImplementation(async () =>
+				Response.json({
+					task: "transcribe",
+					text: "Hello there.",
+					words: [],
+					segments: [],
+				}),
+			);
+			const plugin = useServer();
+
+			await transcribe(plugin);
+
+			expect(savedNote(plugin)).toContain("Hello there.");
+		});
+
+		test("an address with a user name and password sends nothing and names no part of it", async () => {
+			const plugin = useServer({ serverUrl: "http://review:SECRET@127.0.0.1:8000/v1" });
+
+			const notice = await finalNotice(plugin);
+
+			expect(providerMock).not.toHaveBeenCalled();
+			expect(notice).not.toContain("SECRET");
+			expect(notice).toBe(
+				"Transcription failed: Enter the address of your OpenAI-compatible server, starting with http:// or https:// and with no user name or password, in the transcript settings.",
+			);
+		});
+
 		test("words a server lists without punctuation take their punctuation from its text", async () => {
 			providerMock.mockImplementation(async () =>
 				Response.json({
@@ -2208,6 +2659,31 @@ describe("TranscriptionService", () => {
 			await transcribe(plugin);
 
 			expect(savedNote(plugin)).toBe(timedNote);
+		});
+
+		test("words keep taking punctuation from the text after a long stretch the words leave out and a word they split", async () => {
+			const said = "so we kept re running it Then it was running".split(" ");
+			providerMock.mockImplementation(async () =>
+				Response.json({
+					text: "Um, uh, you know, like, I mean, honestly, okay, right, well, look, so we kept re-running it. Then it was running. Hi!",
+					words: [
+						...said.map((word, index) => ({
+							word,
+							start: 1.2 + index / 5,
+							end: 1.4 + index / 5,
+						})),
+						{ word: "Hi", start: 10.16, end: 10.5 },
+					],
+				}),
+			);
+			const plugin = useServer();
+
+			await transcribe(plugin);
+
+			expect(savedNote(plugin)).toBe(
+				`# Test Episode\n\n[00:00:01](${link("1.2")}) so we kept re running it. Then it was running.\n\n` +
+					`[00:00:10](${link("10.16")}) Hi!`,
+			);
 		});
 
 		test("a 400 about anything else is not sent again", async () => {
@@ -2291,7 +2767,7 @@ describe("TranscriptionService", () => {
 				new TranscriptionService(plugin).transcribeCurrentEpisodeFromAudio();
 
 				expect(noticeMessages).toEqual([
-					"Enter the address of your OpenAI-compatible server, starting with http:// or https://, in the transcript settings.",
+					"Enter the address of your OpenAI-compatible server, starting with http:// or https:// and with no user name or password, in the transcript settings.",
 				]);
 				expect(providerMock).not.toHaveBeenCalled();
 			},
