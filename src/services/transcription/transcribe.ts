@@ -172,7 +172,7 @@ export async function transcribe(job: TranscriptionJob): Promise<Transcript> {
 	// A label the reel did not hear can name a voice that another part labels too.
 	if (speakers && parts.length > 1 && [...labels].some((label) => !sameSpeaker?.has(label))) {
 		warnings.push(
-			`${choice.label} transcribed this episode in ${parts.length} parts, and speaker labels restart in each, so one person can have several labels.`,
+			`${choice.label} transcribed this episode in ${parts.length} parts. Speakers not matched across parts got new numbers, so one person can have more than one.`,
 		);
 	}
 	return { content, warnings };
