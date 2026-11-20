@@ -86,20 +86,22 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		.split(/\s+/)
 		.filter(Boolean);
 	// Apostrophes, straight or curly, count inside a word, so "we’ll" is not "well", and not at
-	// its ends, where they quote it, as in "'Hello".
+	// its ends, where they quote it, as in "'Hello", or between digits, as in "1’000".
 	const bare = (token: string) =>
 		token
 			.toLowerCase()
 			.replace(/’/g, "'")
 			.replace(/[^\p{L}\p{M}\p{N}']/gu, "")
+			.replace(/(\p{N})'(?=\p{N})/gu, "$1")
 			.replace(/^'+|'+$/g, "");
 	const keys = tokens.map(bare);
 	const wordKeys = words.map((word) => bare(word.text));
-	/** Where word `w` ends when it starts at offset `o` of token `t`. */
+	/** Where word `w` ends when it starts at offset `o` of token `t`, past an apostrophe after it. */
 	const step = (w: number, t: number, o: number): [number, number] | undefined => {
 		const key = wordKeys[w];
 		if (!key || t >= keys.length || !keys[t].startsWith(key, o)) return undefined;
-		const end = o + key.length;
+		// The words "we" and "ll" both fall in "we'll".
+		const end = o + key.length + (keys[t][o + key.length] === "'" ? 1 : 0);
 		return end === keys[t].length ? [t + 1, 0] : [t, end];
 	};
 	/** Whether the two words after `w` follow on from where `w` ends. */
