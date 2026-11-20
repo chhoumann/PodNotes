@@ -1838,10 +1838,22 @@ describe("TranscriptionService", () => {
 					"Rock n roll! Yes, we ll. Rock n roll!",
 				],
 				[
-					"restores punctuation after a Qwen number its text groups with an apostrophe",
-					"It costs 1’000. Or 2'000. Next!",
-					"It costs 1000 Or 2000 Next",
-					"It costs 1000. Or 2000. Next!",
+					"restores punctuation to Qwen's words that leave out an apostrophe their text has",
+					"It costs 1’000. Or 2'000. Back in the 90’s! Next.",
+					"It costs 1000 Or 2000 Back in the 90s Next",
+					"It costs 1000. Or 2000. Back in the 90s! Next.",
+				],
+				[
+					"keeps the first of the Qwen words split from one token of its text in that token when a later one spells it",
+					"Short-term, short. Done.",
+					"Short term short Done",
+					"Short term, short. Done.",
+				],
+				[
+					"does not give a Qwen word the punctuation of one that is spelled like it with an apostrophe",
+					"It’s, its own. Done.",
+					"its own Done",
+					"its own. Done.",
 				],
 				[
 					"gives Qwen's words Arabic punctuation from its text",
