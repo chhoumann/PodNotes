@@ -1826,6 +1826,18 @@ describe("TranscriptionService", () => {
 					"we'll see. Okay.",
 				],
 				[
+					"does not give a Qwen contraction with a curly apostrophe the punctuation of a word spelled like it without one",
+					"Well, we’ll see. ‘Okay.’ Bye.",
+					"we’ll see Okay Bye",
+					"we’ll see. ‘Okay.’ Bye.",
+				],
+				[
+					"gives Qwen's words Arabic punctuation from its text",
+					"مرحبا، كيف حالك؟ أنا بخير؛ شكرا.",
+					"مرحبا كيف حالك أنا بخير شكرا",
+					"مرحبا، كيف حالك؟ أنا بخير؛ شكرا.",
+				],
+				[
 					"adds nothing to Qwen's words when it lists quotes as entries of their own",
 					'"Hello world." Next!',
 					'" Hello world " Next',
