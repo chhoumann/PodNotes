@@ -85,23 +85,25 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		.replace(/[「『《【（]+/gu, " $&")
 		.split(/\s+/)
 		.filter(Boolean);
-	// Apostrophes, straight or curly, count inside a word, so "we’ll" is not "well", and not at
-	// its ends, where they quote it, as in "'Hello", or between digits, as in "1’000".
-	const bare = (token: string) =>
+	// Words match the text without apostrophes, so "90s" finds "90’s", and "rock", "n" and
+	// "roll" find "rock'n'roll".
+	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{M}\p{N}]/gu, "");
+	// A spelling keeps the apostrophes inside a word, straight or curly, so "we’ll" is not
+	// "well", and drops those at its ends, which quote it, as in "'Hello".
+	const spelled = (token: string) =>
 		token
 			.toLowerCase()
 			.replace(/’/g, "'")
 			.replace(/[^\p{L}\p{M}\p{N}']/gu, "")
-			.replace(/(\p{N})'(?=\p{N})/gu, "$1")
 			.replace(/^'+|'+$/g, "");
 	const keys = tokens.map(bare);
+	const spellings = tokens.map(spelled);
 	const wordKeys = words.map((word) => bare(word.text));
-	/** Where word `w` ends when it starts at offset `o` of token `t`, past an apostrophe after it. */
+	/** Where word `w` ends when it starts at offset `o` of token `t`. */
 	const step = (w: number, t: number, o: number): [number, number] | undefined => {
 		const key = wordKeys[w];
 		if (!key || t >= keys.length || !keys[t].startsWith(key, o)) return undefined;
-		// The words "we" and "ll" both fall in "we'll".
-		const end = o + key.length + (keys[t][o + key.length] === "'" ? 1 : 0);
+		const end = o + key.length;
 		return end === keys[t].length ? [t + 1, 0] : [t, end];
 	};
 	/** Whether the two words after `w` follow on from where `w` ends. */
@@ -121,6 +123,21 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		let start: [number, number] | undefined;
 		for (let p = t; p < Math.min(keys.length, t + 3) && !start; p++) {
 			if (step(w, p, p === t ? o : 0)) start = [p, p === t ? o : 0];
+		}
+		// A word that matches a whole token only once apostrophes are dropped, as "its" matches
+		// "It's,", moves to a later token in reach that it spells exactly, when there is one.
+		const spelling = spelled(word.text);
+		if (
+			start?.[1] === 0 &&
+			keys[start[0]] === wordKeys[w] &&
+			spellings[start[0]] !== spelling
+		) {
+			for (let p = start[0] + 1; p < Math.min(keys.length, t + 3); p++) {
+				if (spellings[p] === spelling) {
+					start = [p, 0];
+					break;
+				}
+			}
 		}
 		for (let p = t + 3; p < Math.min(keys.length, t + RESYNC_TOKENS) && !start; p++) {
 			const at = step(w, p, 0);

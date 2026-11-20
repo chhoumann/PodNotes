@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 109,299 bytes, and the raw budget 334,180. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 109,351 bytes, and the raw budget 334,318. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -100,14 +100,14 @@ main.js raw: 334091 bytes; budget 334091 bytes; 0 bytes remaining
 main.js gzip (level 9): 109234 bytes; budget 109234 bytes; 0 bytes remaining
 ```
 
-On 2026-11-21 both rose for punctuation restored onto words with curly
-apostrophes, words split at an apostrophe and numbers grouped with one, and
-from Arabic marks: from 334,091 raw by 89 bytes, and from 109,234 gzip by 65
-bytes. With it:
+On 2026-11-21 both rose for punctuation restored onto words that match their
+text without apostrophes, each kept apart from a word spelled like it with one,
+and from Arabic marks: from 334,091 raw by 227 bytes, and from 109,234 gzip by
+117 bytes. With it:
 
 ```text
-main.js raw: 334180 bytes; budget 334180 bytes; 0 bytes remaining
-main.js gzip (level 9): 109299 bytes; budget 109299 bytes; 0 bytes remaining
+main.js raw: 334318 bytes; budget 334318 bytes; 0 bytes remaining
+main.js gzip (level 9): 109351 bytes; budget 109351 bytes; 0 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
