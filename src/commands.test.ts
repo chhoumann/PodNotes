@@ -1206,18 +1206,50 @@ describe("Reorder Queue", () => {
 });
 
 describe("Transcribe", () => {
-	it.each(["podnotes-transcribe", "podnotes-transcribe-audio"])(
-		"%s is available for an audio episode only while online",
-		async (id) => {
-			const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
-			const { commands } = await loadPlugin(playing);
-			const available = () =>
-				commands.find((command) => command.id === id)!.checkCallback!(true);
+	/** Loads the plugin online, and returns a check and a run for each command id. */
+	async function transcribeCommands(data: Record<string, unknown>) {
+		const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+		const { commands } = await loadPlugin(data);
+		const command = (id: string) => commands.find((each) => each.id === id)!;
+		return {
+			available: (id: string) => command(id).checkCallback!(true),
+			run: (id: string) => command(id).checkCallback!(false),
+			goOffline: () => {
+				online.mockReturnValue(false);
+				window.dispatchEvent(new Event("offline"));
+			},
+		};
+	}
 
-			expect(available()).toBe(true);
-			online.mockReturnValue(false);
-			window.dispatchEvent(new Event("offline"));
-			expect(available()).toBe(false);
+	it.each(["podnotes-transcribe", "podnotes-transcribe-audio"])(
+		"%s is available for an audio episode only while online with a hosted provider",
+		async (id) => {
+			const { available, goOffline } = await transcribeCommands(playing);
+
+			expect(available(id)).toBe(true);
+			goOffline();
+			expect(available(id)).toBe(false);
 		},
 	);
+
+	it("runs from audio offline with the user's own server, as the Transcript panel does", async () => {
+		// No model yet, so the run stops at its Notice before any request.
+		const { available, run, goOffline } = await transcribeCommands({
+			...playing,
+			transcript: {
+				provider: "openai-compatible",
+				serverUrl: "http://192.168.1.20:8000/v1",
+				model: "",
+			},
+		});
+		goOffline();
+
+		// The plain command looks for the feed's published transcript first, which needs the network.
+		expect(available("podnotes-transcribe")).toBe(false);
+		expect(available("podnotes-transcribe-audio")).toBe(true);
+		run("podnotes-transcribe-audio");
+		expect(said()).toEqual([
+			"Enter a model for your OpenAI-compatible server in the transcript settings.",
+		]);
+	});
 });
