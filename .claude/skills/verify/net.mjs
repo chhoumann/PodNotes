@@ -110,7 +110,8 @@ const watchSource = (turns) => `(() => {
 	// OpenRouter's verbose_json words, at the same times, with numbered speakers.
 	const openRouterWords = (sentence, speaker, from) => words(sentence, speaker, from).map(({ punctuated_word, start, end }) => ({ word: punctuated_word, start, end, speaker, speaker_label: "speaker_" + speaker, confidence: 0.99 }));
 	const openrouter = { text: fullText, words: turns.flatMap(([from, speaker, line]) => openRouterWords(line, speaker, from)) };
-	// Voxtral times segments and refuses word times; Qwen3 ASR times words and labels no speaker.
+	// Voxtral times segments and refuses word times. Qwen3 ASR times words, labels no speaker,
+	// and keeps the punctuation only in its text.
 	const plainOpenRouter = {
 		"mistralai/voxtral-mini-transcribe-3-0": (form) =>
 			form.has("timestamp_granularities[]")
@@ -122,7 +123,7 @@ const watchSource = (turns) => `(() => {
 							return { id, start: from, end: Math.round(turnWords[turnWords.length - 1].end * 10) / 10, text: " " + line };
 						}),
 					},
-		"qwen/qwen3-asr-1.7b": () => ({ text: openrouter.text, words: openrouter.words.map(({ word, start, end }) => ({ word, start, end })) }),
+		"qwen/qwen3-asr-1.7b": () => ({ text: openrouter.text, words: openrouter.words.map(({ word, start, end }) => ({ word: word.replace(/^[^\\p{L}\\p{M}\\p{N}]+|[^\\p{L}\\p{M}\\p{N}]+$/gu, ""), start, end })) }),
 	};
 	const openrouterCatalog = { data: ${jsLiteral(OPENROUTER_MODELS)}.map((id) => ({ id, expiration_date: null })) };
 	// Grok's MP3 uploads are heard as a diarizing model hears them: a tone under 500 Hz is one
