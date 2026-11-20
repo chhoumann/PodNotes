@@ -64,7 +64,7 @@ const PLAIN_WORD =
 /** Opening quotes and brackets a word takes from the start of its token. */
 const LEADING = /^['“"‘([¿¡「『《【（]+/u;
 /** Closing punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
-const TRAILING = /['.,?!;:…—–”"’)\]。，、？！；：」』》】）।॥]+$/u;
+const TRAILING = /['.,?!;:…—–”"’)\]。，、？！；：」』》】）।॥،؛؟]+$/u;
 
 /**
  * Qwen3 ASR, and the servers that run it or Whisper, can list words without punctuation and
@@ -85,11 +85,12 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		.replace(/[「『《【（]+/gu, " $&")
 		.split(/\s+/)
 		.filter(Boolean);
-	// Apostrophes count inside a word, so "we'll" is not "well", and not at its ends, where
-	// they quote it, as in "'Hello".
+	// Apostrophes, straight or curly, count inside a word, so "we’ll" is not "well", and not at
+	// its ends, where they quote it, as in "'Hello".
 	const bare = (token: string) =>
 		token
 			.toLowerCase()
+			.replace(/’/g, "'")
 			.replace(/[^\p{L}\p{M}\p{N}']/gu, "")
 			.replace(/^'+|'+$/g, "");
 	const keys = tokens.map(bare);
