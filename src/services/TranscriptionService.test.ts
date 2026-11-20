@@ -1832,6 +1832,18 @@ describe("TranscriptionService", () => {
 					"we’ll see. ‘Okay.’ Bye.",
 				],
 				[
+					"gives the last of the Qwen words split at an apostrophe in its text that token's punctuation",
+					"Rock’n’roll! Yes, we’ll. Rock'n'roll!",
+					"Rock n roll Yes we ll Rock n roll",
+					"Rock n roll! Yes, we ll. Rock n roll!",
+				],
+				[
+					"restores punctuation after a Qwen number its text groups with an apostrophe",
+					"It costs 1’000. Or 2'000. Next!",
+					"It costs 1000 Or 2000 Next",
+					"It costs 1000. Or 2000. Next!",
+				],
+				[
 					"gives Qwen's words Arabic punctuation from its text",
 					"مرحبا، كيف حالك؟ أنا بخير؛ شكرا.",
 					"مرحبا كيف حالك أنا بخير شكرا",
