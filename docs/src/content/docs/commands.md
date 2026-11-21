@@ -26,7 +26,7 @@ Obsidian lists each PodNotes command with the **PodNotes:** prefix, but only whi
 | [Create podcast feed note](/commands/#create-podcast-feed-note) | `podnotes:create-podcast-feed-note` | You added at least one podcast, and **Podcast note path** and **Podcast note template** are set |
 | [Copy universal episode link to clipboard](/commands/#copy-universal-episode-link-to-clipboard) | `podnotes:get-share-link-episode` | An episode is loaded |
 | [Transcribe current episode](/commands/#transcribe-current-episode) | `podnotes:podnotes-transcribe` | An audio episode is loaded, and the device is online |
-| [Transcribe current episode from audio](/commands/#transcribe-current-episode-from-audio) | `podnotes:podnotes-transcribe-audio` | An audio episode is loaded, and the device is online |
+| [Transcribe current episode from audio](/commands/#transcribe-current-episode-from-audio) | `podnotes:podnotes-transcribe-audio` | An audio episode is loaded, and the device is online or **OpenAI-compatible server** is selected |
 
 A paused episode counts as loaded, and so does the episode that PodNotes restores, paused, when Obsidian starts. Hotkeys and workflow plugins use the ID.
 
