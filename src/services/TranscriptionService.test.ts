@@ -2034,8 +2034,8 @@ describe("TranscriptionService", () => {
 					openRouterKey: "openrouter-key",
 					speakers: true,
 				});
-			const RESTART =
-				"OpenRouter transcribed this episode in 2 parts, and speaker labels restart in each, so one person can have several labels.";
+			const UNMATCHED =
+				"OpenRouter transcribed this episode in 2 parts. Speakers not matched across parts got new numbers, so one person can have more than one.";
 
 			test("Grok STT 2.0 numbers each voice once across two parts that label them in the other order", async () => {
 				getEpisodeAudioBufferMock.mockResolvedValue(episode());
@@ -2136,7 +2136,7 @@ describe("TranscriptionService", () => {
 				expect(sent()).toHaveLength(3);
 			});
 
-			test("a voice whose turns are all under 2.6 s gets no clip, keeps its own number, and the notice says labels restart in each", async () => {
+			test("a voice whose turns are all under 2.6 s gets no clip, keeps its own number, and the notice says unmatched speakers got new numbers", async () => {
 				// Cy speaks 2.016 s, after Ann in the second part.
 				getEpisodeAudioBufferMock.mockResolvedValue(
 					episode([...TURNS, { voice: CY, from: 23_334, to: 23_362 }]),
@@ -2153,7 +2153,7 @@ describe("TranscriptionService", () => {
 					"1 Ann",
 					"3 Cy",
 				]);
-				expect(notice).toBe(RESTART);
+				expect(notice).toBe(UNMATCHED);
 				expect(sent()).toHaveLength(3);
 				const reelVoices = framesOf(await sentAudio(sent()[2])).map((frame) =>
 					frame === "silence" ? 0 : frame.voice,
@@ -2185,10 +2185,10 @@ describe("TranscriptionService", () => {
 
 				expect(sent()).toHaveLength(3);
 				expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Cy", "1 Ann"]);
-				expect(notice).toBe(RESTART);
+				expect(notice).toBe(UNMATCHED);
 			});
 
-			test("a reel OpenRouter refuses keeps the parts' labels, saves the note and says labels restart", async () => {
+			test("a reel OpenRouter refuses keeps the parts' labels, saves the note and says unmatched speakers got new numbers", async () => {
 				getEpisodeAudioBufferMock.mockResolvedValue(episode());
 				hearing(() =>
 					Response.json(
@@ -2198,14 +2198,14 @@ describe("TranscriptionService", () => {
 				);
 				const plugin = grok();
 
-				await expect(finalNotice(plugin)).resolves.toBe(RESTART);
+				await expect(finalNotice(plugin)).resolves.toBe(UNMATCHED);
 
 				expect(sent()).toHaveLength(3);
 				expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Bob", "3 Bob", "4 Ann"]);
 			});
 
 			test.each(["elevenlabs/scribe-v2", "microsoft/mai-transcribe-2"])(
-				"%s sends no reel: labels from two parts never name the same speaker, and the notice says labels restart in each",
+				"%s sends no reel: labels from two parts never name the same speaker, and the notice says unmatched speakers got new numbers",
 				async (model) => {
 					getEpisodeAudioBufferMock.mockResolvedValue(episode());
 					hearing();
@@ -2216,7 +2216,7 @@ describe("TranscriptionService", () => {
 						model,
 					});
 
-					await expect(finalNotice(plugin)).resolves.toBe(RESTART);
+					await expect(finalNotice(plugin)).resolves.toBe(UNMATCHED);
 
 					expect(sent()).toHaveLength(2);
 					expect(spoken(savedNote(plugin))).toEqual(["1 Ann", "2 Bob", "3 Bob", "4 Ann"]);

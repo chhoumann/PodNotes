@@ -8,6 +8,7 @@ import downloadEpisodeWithNotice from "src/downloadEpisode";
 import getUniversalPodcastLink from "src/getUniversalPodcastLink";
 import { getEpisodeMediaType } from "src/utility/mediaType";
 import { TRANSCRIBE_FROM_AUDIO_COMMAND } from "src/services/TranscriptionService";
+import { transcriptionChoice } from "src/services/transcription";
 import { notifyPrivateFeedUnavailable } from "src/services/privateFeeds";
 import type PodNotes from "src/main";
 
@@ -280,10 +281,14 @@ export function registerCommands(plugin: PodNotes): void {
 		},
 	});
 
-	const canTranscribe = () =>
-		get(plugin.online) &&
-		!!plugin.api.podcast &&
-		getEpisodeMediaType(plugin.api.podcast) === "audio";
+	const playingAudio = () =>
+		!!plugin.api.podcast && getEpisodeMediaType(plugin.api.podcast) === "audio";
+	// The published transcript comes from the feed, so this command needs the network.
+	const canTranscribe = () => get(plugin.online) && playingAudio();
+	// The user's own server can run on this computer, so offline it stays available, as the
+	// Transcript panel's button does.
+	const canTranscribeAudio = () =>
+		(get(plugin.online) || !!transcriptionChoice(plugin.settings).server) && playingAudio();
 
 	plugin.addCommand({
 		id: "podnotes-transcribe",
@@ -304,10 +309,10 @@ export function registerCommands(plugin: PodNotes): void {
 		name: TRANSCRIBE_FROM_AUDIO_COMMAND,
 		checkCallback: (checking) => {
 			if (checking) {
-				return canTranscribe();
+				return canTranscribeAudio();
 			}
 
-			if (canTranscribe()) {
+			if (canTranscribeAudio()) {
 				plugin.getTranscriptionService().transcribeCurrentEpisodeFromAudio();
 			}
 		},

@@ -12,7 +12,7 @@ main.js raw: 307131 bytes; budget 330000 bytes; 22869 bytes remaining
 main.js gzip (level 9): 97161 bytes; budget 100000 bytes; 2839 bytes remaining
 ```
 
-The gzip budget is now 109,248 bytes, and the raw budget 334,097. On 2026-10-14 it rose from 100,000 for
+The gzip budget is now 109,282 bytes, and the raw budget 334,171. On 2026-10-14 it rose from 100,000 for
 the full player's Transcript panel, which the owner approved at about 1.9 KB
 and which measured 2,576 bytes. The coordinator set 103,000 to keep the
 panel's Find and Follow chip and to leave room for fixes in flight. The
@@ -100,12 +100,30 @@ main.js raw: 334091 bytes; budget 334091 bytes; 0 bytes remaining
 main.js gzip (level 9): 109234 bytes; budget 109234 bytes; 0 bytes remaining
 ```
 
-On 2026-11-21 both rose for Arabic marks restored onto unpunctuated words: from
-334,091 raw by 6 bytes, and from 109,234 gzip by 14 bytes. With it:
+On 2026-11-20 both rose for the warning after a transcript in parts, which now
+says that speakers not matched across parts got new numbers: from 334,091 raw by
+14 bytes, and from 109,234 gzip by 6 bytes. With it:
 
 ```text
-main.js raw: 334097 bytes; budget 334097 bytes; 0 bytes remaining
-main.js gzip (level 9): 109248 bytes; budget 109248 bytes; 0 bytes remaining
+main.js raw: 334105 bytes; budget 334105 bytes; 0 bytes remaining
+main.js gzip (level 9): 109240 bytes; budget 109240 bytes; 0 bytes remaining
+```
+
+On 2026-11-21 both rose for "Transcribe current episode from audio" offline with
+the user's own server, as the Transcript panel's button already ran: from 334,105
+raw by 60 bytes, and from 109,240 gzip by 30 bytes. With it:
+
+```text
+main.js raw: 334165 bytes; budget 334165 bytes; 0 bytes remaining
+main.js gzip (level 9): 109270 bytes; budget 109270 bytes; 0 bytes remaining
+```
+
+On 2026-11-21 both rose for Arabic marks restored onto unpunctuated words: from
+334,165 raw by 6 bytes, and from 109,270 gzip by 12 bytes. With it:
+
+```text
+main.js raw: 334171 bytes; budget 334171 bytes; 0 bytes remaining
+main.js gzip (level 9): 109282 bytes; budget 109282 bytes; 0 bytes remaining
 ```
 
 Gzip uses Node's `gzipSync` at level 9, without a filename or timestamp.
