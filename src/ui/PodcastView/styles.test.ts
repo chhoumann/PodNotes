@@ -9,6 +9,23 @@ import { componentCss, styled } from "../../../tests/mocks/componentCss";
 const REDUCE = "(prefers-reduced-motion: reduce)";
 const UI = path.resolve(import.meta.dirname, "..");
 
+/**
+ * Obsidian's theme variables that the tested declarations read. jsdom substitutes var() as a
+ * browser does, so a declaration whose variable is undefined falls back to its initial value.
+ */
+const theme = {
+	"--interactive-accent": "rgb(124, 58, 237)",
+	"--background-modifier-hover": "rgba(0, 0, 0, 0.075)",
+	"--background-modifier-border": "rgb(224, 224, 224)",
+	"--shadow-s": "rgba(0, 0, 0, 0.1) 0px 1px 2px",
+	"--size-4-1": "4px",
+	"--size-4-2": "8px",
+	"--size-4-5": "20px",
+};
+const THEME = `body { ${Object.entries(theme)
+	.map(([name, value]) => `${name}: ${value};`)
+	.join(" ")} }`;
+
 /** `html` in the view, with `{}` standing for the component's own scoping class. */
 const inView = (component: string, html: string) =>
 	`<div class="podcast-view pn-PodcastView">${html.replaceAll("{}", `pn-${component}`)}</div>`;
@@ -20,21 +37,21 @@ describe("reduced motion", () => {
 			"Deck",
 			'<div class="pn-deck {}"><button class="pn-play"></button></div>',
 			".pn-play",
-			["transform 120ms ease", ""],
+			["transform 0.12s", "none"],
 		],
 		[
 			"a podcast card",
 			"LibraryPage",
 			'<div class="pn-grid {}"><button class="pn-gridcard"></button></div>',
 			".pn-gridcard",
-			["transform 120ms ease", ""],
+			["transform 0.12s", "none"],
 		],
 		[
 			"a playing row's bars",
 			"EpisodeRow",
 			'<div class="pn-ep {}"><span class="pn-eq"><i></i></span></div>',
 			".pn-eq i",
-			["", "pn-eq 1s ease-in-out infinite"],
+			["all", "1s ease-in-out -0.8s infinite pn-eq"],
 		],
 	])(
 		"%s stops moving when the user prefers reduced motion",
@@ -56,7 +73,7 @@ describe("focus ring", () => {
 	test("draws the video's play button ring inside the frame that clips it, and others outside", () => {
 		const css = componentCss(["PodcastView", "Player"], { states: ["focus-visible"] });
 		styled(
-			css,
+			THEME + css,
 			inView(
 				"Player",
 				'<section class="pn-player {}"><div class="pn-video"><button class="pn-vplay focus-visible"></button></div><button class="pn-iconbtn focus-visible"></button></section>',
@@ -69,8 +86,8 @@ describe("focus ring", () => {
 		};
 
 		expect([ring(".pn-vplay"), ring(".pn-iconbtn")]).toEqual([
-			["2px solid var(--interactive-accent)", "-2px"],
-			["2px solid var(--interactive-accent)", "1px"],
+			[`2px solid ${theme["--interactive-accent"]}`, "-2px"],
+			[`2px solid ${theme["--interactive-accent"]}`, "1px"],
 		]);
 	});
 });
@@ -108,34 +125,30 @@ describe("hover", () => {
 		[
 			"the skip button",
 			"Deck",
-			'<div class="pn-deck {}"><button class="pn-skip%"></button></div>',
+			'<div class="pn-deck {}"><button class="pn-bare pn-skip%"></button></div>',
 			".pn-skip",
 			"rgba(0, 0, 0, 0)",
 		],
 		[
 			"the panel switch that is on",
 			"Player",
-			'<section class="pn-player {}"><button class="pn-sw%" aria-pressed="true"></button></section>',
+			'<section class="pn-player {}"><button class="pn-bare pn-sw%" aria-pressed="true"></button></section>',
 			".pn-sw",
-			"var(--background-modifier-border)",
+			theme["--background-modifier-border"],
 		],
 	])(
 		"%s keeps its resting background after a tap",
 		(_name, component, html, selector, resting) => {
 			const background = (hovered: boolean, media: string[] = []) => {
-				// jsdom drops a var() in a shorthand, so each background stands in as its color.
-				const css = componentCss(["PodcastView", component], {
-					media,
-					states: ["hover"],
-				}).replaceAll("background: var(", "background-color: var(");
+				const css = componentCss(["PodcastView", component], { media, states: ["hover"] });
 				const markup = inView(component, html.replace("%", hovered ? " hover" : ""));
-				return getComputedStyle(styled(css, markup, selector)).backgroundColor;
+				return getComputedStyle(styled(THEME + css, markup, selector)).backgroundColor;
 			};
 
 			expect([background(false), background(true), background(true, [HOVER])]).toEqual([
 				resting,
 				resting,
-				"var(--background-modifier-hover)",
+				theme["--background-modifier-hover"],
 			]);
 		},
 	);
@@ -162,7 +175,7 @@ describe("the transcript's note button", () => {
 
 		expect([label("pn-panel-head"), label("pn-panel-empty")]).toEqual([
 			{
-				display: "inline",
+				display: "block",
 				visibility: "visible",
 				position: "absolute",
 				clipPath: "inset(50%)",
@@ -176,11 +189,7 @@ describe("on a tablet", () => {
 	test("the rail's add button keeps its own padding over Obsidian's for every button", () => {
 		const obsidian =
 			".is-tablet button:not(.clickable-icon) { padding: var(--size-4-1) var(--size-4-5); }";
-		// jsdom drops a var() in a shorthand, so Obsidian's 4 px spacing steps stand in.
-		const css = (obsidian + componentCss(["PodcastView", "Rail"])).replace(
-			/var\(--size-4-(\d)\)/g,
-			(_, step: string) => `${Number(step) * 4}px`,
-		);
+		const css = THEME + obsidian + componentCss(["PodcastView", "Rail"]);
 		const { padding } = getComputedStyle(
 			styled(
 				css,
@@ -195,7 +204,7 @@ describe("on a tablet", () => {
 
 describe("the player's stage", () => {
 	test("dresses its own artwork, not the covers of a panel's rows shown in it", () => {
-		const css = componentCss(["PodcastView", "Player", "EpisodeRow"]);
+		const css = THEME + componentCss(["PodcastView", "Player", "EpisodeRow"]);
 		const tile = (id: string) => `<span id="${id}" class="pn-cover pn-filetile"></span>`;
 		styled(
 			css,
@@ -208,8 +217,8 @@ describe("the player's stage", () => {
 		};
 
 		expect([look("art"), look("row")]).toEqual([
-			{ shadow: "var(--shadow-s)", icon: "25cqw" },
-			{ shadow: expect.not.stringContaining("--shadow-s"), icon: "18px" },
+			{ shadow: theme["--shadow-s"], icon: "25cqw" },
+			{ shadow: expect.not.stringContaining(theme["--shadow-s"]), icon: "18px" },
 		]);
 	});
 });
