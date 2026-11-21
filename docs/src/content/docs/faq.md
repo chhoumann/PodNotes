@@ -18,7 +18,7 @@ PodNotes opens the view by itself only once, on a new install. After that, Obsid
 ### Why are some commands missing?
 
 Most commands appear only while an episode is loaded. A paused episode counts, and so does the episode PodNotes shows when Obsidian starts.
-**PodNotes: Create episode note** needs **Episode note path** and **Episode note template**. With both set, it appears when an episode is loaded or you have added a podcast. The transcribe commands need an audio episode and a connection.
+**PodNotes: Create episode note** needs **Episode note path** and **Episode note template**. With both set, it appears when an episode is loaded or you have added a podcast. The transcribe commands need an audio episode and a connection, though **PodNotes: Transcribe current episode from audio** also works offline with **OpenAI-compatible server** selected.
 **PodNotes: Show player**, **PodNotes: Reorder Queue**, and the capture commands are always available. [Commands](/commands/) lists what each command needs.
 
 ### What changes when I update to 2.25.0?
@@ -93,7 +93,7 @@ Links to your own media files need only the file in your vault. See [Removed dow
 
 ### Can I listen offline?
 
-Yes, to episodes you downloaded and to your own media files. Offline, the PodNotes view shows **Offline**, and lists split into **Available offline** and **Needs a connection**. Podcast search, refreshing feeds, and transcription need a connection. See [Listen offline](/local_files/#listen-offline).
+Yes, to episodes you downloaded and to your own media files. Offline, the PodNotes view shows **Offline**, and lists split into **Available offline** and **Needs a connection**. Podcast search and refreshing feeds need a connection. So does transcription, unless **OpenAI-compatible server** is selected and you can reach the server without the internet, such as one on your computer or your local network. See [Listen offline](/local_files/#listen-offline).
 
 ### Does playback progress sync between devices?
 
