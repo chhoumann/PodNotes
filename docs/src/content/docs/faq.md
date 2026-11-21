@@ -93,7 +93,7 @@ Links to your own media files need only the file in your vault. See [Removed dow
 
 ### Can I listen offline?
 
-Yes, to episodes you downloaded and to your own media files. Offline, the PodNotes view shows **Offline**, and lists split into **Available offline** and **Needs a connection**. Podcast search, refreshing feeds, and transcription need a connection. See [Listen offline](/local_files/#listen-offline).
+Yes, to episodes you downloaded and to your own media files. Offline, the PodNotes view shows **Offline**, and lists split into **Available offline** and **Needs a connection**. Podcast search and refreshing feeds need a connection, and so does transcription unless you use a server on your computer. See [Listen offline](/local_files/#listen-offline).
 
 ### Does playback progress sync between devices?
 
