@@ -85,19 +85,14 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		.replace(/[「『《【（]+/gu, " $&")
 		.split(/\s+/)
 		.filter(Boolean);
-	// Words match the text without apostrophes, so "90s" finds "90’s", and "rock", "n" and
-	// "roll" find "rock'n'roll".
-	const bare = (token: string) => token.toLowerCase().replace(/[^\p{L}\p{M}\p{N}]/gu, "");
-	// A spelling keeps the apostrophes inside a word, straight or curly, so "we’ll" is not
-	// "well", and drops those at its ends, which quote it, as in "'Hello".
-	const spelled = (token: string) =>
+	// Apostrophes count inside a word, so "we'll" is not "well", and not at its ends, where
+	// they quote it, as in "'Hello".
+	const bare = (token: string) =>
 		token
 			.toLowerCase()
-			.replace(/’/g, "'")
 			.replace(/[^\p{L}\p{M}\p{N}']/gu, "")
 			.replace(/^'+|'+$/g, "");
 	const keys = tokens.map(bare);
-	const spellings = tokens.map(spelled);
 	const wordKeys = words.map((word) => bare(word.text));
 	/** Where word `w` ends when it starts at offset `o` of token `t`. */
 	const step = (w: number, t: number, o: number): [number, number] | undefined => {
@@ -123,21 +118,6 @@ function punctuated(words: Word[], text: unknown): Word[] {
 		let start: [number, number] | undefined;
 		for (let p = t; p < Math.min(keys.length, t + 3) && !start; p++) {
 			if (step(w, p, p === t ? o : 0)) start = [p, p === t ? o : 0];
-		}
-		// A word that matches a whole token only once apostrophes are dropped, as "its" matches
-		// "It's,", moves to a later token in reach that it spells exactly, when there is one.
-		const spelling = spelled(word.text);
-		if (
-			start?.[1] === 0 &&
-			keys[start[0]] === wordKeys[w] &&
-			spellings[start[0]] !== spelling
-		) {
-			for (let p = start[0] + 1; p < Math.min(keys.length, t + 3); p++) {
-				if (spellings[p] === spelling) {
-					start = [p, 0];
-					break;
-				}
-			}
 		}
 		for (let p = t + 3; p < Math.min(keys.length, t + RESYNC_TOKENS) && !start; p++) {
 			const at = step(w, p, 0);

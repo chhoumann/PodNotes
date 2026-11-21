@@ -1826,36 +1826,6 @@ describe("TranscriptionService", () => {
 					"we'll see. Okay.",
 				],
 				[
-					"does not give a Qwen contraction with a curly apostrophe the punctuation of a word spelled like it without one",
-					"Well, we’ll see. ‘Okay.’ Bye.",
-					"we’ll see Okay Bye",
-					"we’ll see. ‘Okay.’ Bye.",
-				],
-				[
-					"gives the last of the Qwen words split at an apostrophe in its text that token's punctuation",
-					"Rock’n’roll! Yes, we’ll. Rock'n'roll!",
-					"Rock n roll Yes we ll Rock n roll",
-					"Rock n roll! Yes, we ll. Rock n roll!",
-				],
-				[
-					"restores punctuation to Qwen's words that leave out an apostrophe their text has",
-					"It costs 1’000. Or 2'000. Back in the 90’s! Next.",
-					"It costs 1000 Or 2000 Back in the 90s Next",
-					"It costs 1000. Or 2000. Back in the 90s! Next.",
-				],
-				[
-					"keeps the first of the Qwen words split from one token of its text in that token when a later one spells it",
-					"Short-term, short. Done.",
-					"Short term short Done",
-					"Short term, short. Done.",
-				],
-				[
-					"does not give a Qwen word the punctuation of one that is spelled like it with an apostrophe",
-					"It’s, its own. Done.",
-					"its own Done",
-					"its own. Done.",
-				],
-				[
 					"gives Qwen's words Arabic punctuation from its text",
 					"مرحبا، كيف حالك؟ أنا بخير؛ شكرا.",
 					"مرحبا كيف حالك أنا بخير شكرا",
