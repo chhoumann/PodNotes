@@ -71,7 +71,7 @@ When the device is offline, the PodNotes view shows **Offline** at the top. Down
 - Episode lists split into **Available offline** and **Needs a connection**. The Queue and **Local files** pages do not split.
 - An episode under **Needs a connection** does not play. Selecting it shows "Not downloaded".
 - Lists show the episodes from the copy of each feed on this device. See [When a feed cannot be reached](/podcasts/#when-a-feed-cannot-be-reached).
-- Podcast search, refreshing feeds, **Set feed address**, and transcription need a connection. The transcribe commands are missing from the command palette while offline. With **OpenAI-compatible server** selected, a server on your computer can still transcribe with **PodNotes: Transcribe current episode from audio** or **Transcribe with your server** in the **Transcript** panel.
+- Podcast search, refreshing feeds, and **Set feed address** need a connection. So does transcription with a cloud provider, whose transcribe commands are missing from the command palette while offline. With **OpenAI-compatible server** selected, a server you can reach without the internet, such as one on your computer or your local network, can still transcribe a local file or a downloaded episode with **PodNotes: Transcribe current episode from audio** or **Transcribe with your server** in the **Transcript** panel.
 
 Notes, timestamps, the queue, and playlists work offline.
 
