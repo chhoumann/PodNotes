@@ -23,7 +23,11 @@ and is built with Astro Starlight.
 Generated plugin artifacts such as `main.js` and source maps are ignored by git
 and should not be hand-edited. Production builds write `main.js` at the repo
 root for release packaging; development builds write into `build/` and maintain
-root symlinks for local Obsidian loading.
+root symlinks for local Obsidian loading. The plugin ships `main.js`,
+`manifest.json`, and `styles.css`. The view's Svelte components inject their own
+CSS from `main.js`; the committed root `styles.css` holds only the `pn-` rules
+for elements built outside the view, such as Settings rows and Notices, because
+Obsidian loads it whether or not the view has mounted.
 
 ## Tooling
 - Use Node 22. The repo has `.nvmrc`, `.npmrc`, and `package.json` engines for
@@ -63,7 +67,7 @@ svelte-check's native API path passes when a tsconfig matches no files, which
 `check:a11y` in temporary workspaces and requires it to fail on that case and
 when the native compiler cannot start.
 
-After `npm run build`, `npm run size` enforces 334,171 raw bytes and 109,282 gzip bytes at level 9 for root `main.js` in the Test workflow's Build and sizes worker. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
+After `npm run build`, `npm run size` enforces 333,899 raw bytes and 109,091 gzip bytes at level 9 for root `main.js` in the Test workflow's Build and sizes worker. `npm run size:data` reports a synthetic v2 stress library with 50 feeds, 2,000 history entries, and 200 saved episodes from frozen NPR metadata, including duplicated snapshots. Its 1.5 MB document goal is advisory. Pass an additive candidate JSON path to report optional-field overhead without changing existing data. In the isolated Obsidian instance, `npm run count:writes -- start`, `report`, and `stop` record writes to PodNotes' exact `data.json` path. Stop the recorder before stopping the instance, because recorder commands start a stopped instance; plugin reloads invalidate its counts.
 
 Before opening a PR or cutting a release, run the CI-equivalent checks locally:
 
@@ -116,7 +120,8 @@ local file, drive each feature, and capture evidence.
 ### Shared dev vault (macOS main checkout)
 The canonical `/Users/christian/Developer/PodNotes` checkout uses the shared
 `dev` vault at `/Users/christian/Developer/dev_vault/dev`, whose
-`.obsidian/plugins/podnotes` symlinks point at that checkout's artifacts:
+`.obsidian/plugins/podnotes` symlinks point at that checkout's `main.js`,
+`manifest.json`, and `styles.css`:
 
 ```bash
 npm run dev
@@ -317,7 +322,7 @@ layout.
 ## Release Workflow
 Goal: publish each version from a tested, reviewed, and attested commit. Stop
 when the GitHub release is public, its tag points at the release commit, and
-`main.js` and `manifest.json` match their recorded SHA-256 digests.
+`main.js`, `manifest.json`, and `styles.css` match their recorded SHA-256 digests.
 
 Three workflows in `.github/workflows/` call reusable workflows in
 `chhoumann/obsidian-plugin-workflows` pinned to v5.0.0
@@ -347,7 +352,7 @@ Three workflows in `.github/workflows/` call reusable workflows in
 3. `Release` (`release.yml`) validates again, recomputes the version, and runs
    `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm run test`,
    and `npm run docs:build`. It builds, creates the `<version>` tag, attests
-   `main.js` and `manifest.json`, uploads them to a draft GitHub release,
+   `main.js`, `manifest.json`, and `styles.css`, uploads them to a draft GitHub release,
    downloads and re-hashes them, publishes, and then deletes the recovery
    branch. Slack and Discord notifications are optional secrets.
 

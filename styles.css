@@ -1,0 +1,51 @@
+/* Obsidian loads this sheet while PodNotes is enabled, so it holds the rules for
+   elements built outside the PodNotes view. The view's components inject their own. */
+
+/* A text setting whose field spans the row under its name. */
+.setting-item.pn-stacked {
+	flex-direction: column;
+	align-items: unset;
+	gap: 10px;
+}
+
+.pn-stacked .pn-field {
+	width: 100%;
+}
+
+.pn-stacked textarea.pn-template {
+	height: 25vh;
+}
+
+/* A long QuickAdd choice name ends in an ellipsis inside its button, so the row's
+   name and Clear keep their place. */
+.setting-item-control.pn-choice-control {
+	min-width: 0;
+}
+
+.pn-choice-control button.pn-choice {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pn-download-head {
+	display: flex;
+	width: 100%;
+}
+
+.pn-download-title {
+	text-align: center;
+	font-weight: bold;
+	margin-bottom: 0.5em;
+}
+
+.pn-download-body {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+}
+
+.pn-download-error {
+	font-style: italic;
+}

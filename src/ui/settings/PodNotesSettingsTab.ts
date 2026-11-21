@@ -235,14 +235,6 @@ const CREDENTIAL_KIND_BY_REFERENCE = Object.fromEntries(
 	CREDENTIAL_KINDS.map((kind) => [CREDENTIALS[kind].settingsKey, kind]),
 ) as Record<CredentialSettingsKey, CredentialKind>;
 
-function stackSettingVertically(setting: Setting): void {
-	setting.settingEl.setCssStyles({
-		flexDirection: "column",
-		alignItems: "unset",
-		gap: "10px",
-	});
-}
-
 export class PodNotesSettingsTab extends PluginSettingTab {
 	plugin: PodNotes;
 
@@ -609,22 +601,20 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 					}
 				};
 				if (field.kind === "area" || field.kind === "template") {
-					stackSettingVertically(setting);
+					setting.settingEl.classList.add("pn-stacked");
 					setting.addTextArea((area) => {
-						area.inputEl.setCssStyles({
-							width: "100%",
-							height: field.kind === "template" ? "25vh" : "",
-						});
+						area.inputEl.classList.add("pn-field");
+						if (field.kind === "template") area.inputEl.classList.add("pn-template");
 						bind(area);
 					});
 				} else {
-					if (!field.kind) stackSettingVertically(setting);
+					if (!field.kind) setting.settingEl.classList.add("pn-stacked");
 					setting.addText((text) => {
 						if (field.kind === "number") {
 							text.inputEl.type = "number";
 							text.inputEl.min = field.min?.toString() ?? "";
 							text.inputEl.max = field.max?.toString() ?? "";
-						} else text.inputEl.setCssStyles({ width: "100%" });
+						} else text.inputEl.classList.add("pn-field");
 						bind(text);
 						// Desktop fires no change on Enter.
 						text.inputEl.addEventListener("keydown", (event) => {
@@ -822,7 +812,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 				setting
 					.addButton((button) => {
 						// Returns no promise, or Obsidian swaps the label for a spinner while the picker is open.
-						choose = button.onClick(() => {
+						choose = button.setClass("pn-choice").onClick(() => {
 							const quickAdd = findQuickAdd(this.app);
 							if ("fix" in quickAdd) {
 								(this.app as App2).setting.openTabById("community-plugins");
@@ -833,14 +823,7 @@ export class PodNotesSettingsTab extends PluginSettingTab {
 								() => {},
 							);
 						});
-						// A long choice name ends in an ellipsis inside the button, so the row's name
-						// and Clear keep their place.
-						setting.controlEl.setCssStyles({ minWidth: "0" });
-						choose.buttonEl.setCssStyles({
-							display: "block",
-							overflow: "hidden",
-							textOverflow: "ellipsis",
-						});
+						setting.controlEl.classList.add("pn-choice-control");
 					})
 					.addButton((button) => {
 						create = button

@@ -25,7 +25,7 @@ npm run start:e2e-obsidian
 
 This starts an isolated Obsidian with its own vault that loads this checkout's build. After a rebuild, run it again to reload PodNotes. `npm run stop:e2e-obsidian` stops it.
 
-To use your own test vault instead, link `main.js` and `manifest.json` from the repository root into the vault's `.obsidian/plugins/podnotes/` folder. After each rebuild, turn PodNotes off and on in **Settings → Community plugins**. Use a vault you do not mind breaking.
+To use your own test vault instead, link `main.js`, `manifest.json`, and `styles.css` from the repository root into the vault's `.obsidian/plugins/podnotes/` folder. After each rebuild, turn PodNotes off and on in **Settings → Community plugins**. Use a vault you do not mind breaking.
 
 ## Run the checks
 

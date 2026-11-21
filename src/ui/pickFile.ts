@@ -15,7 +15,7 @@ export function pickFile(
 	const fileInput = activeDocument.body.createEl("input");
 	fileInput.type = "file";
 	fileInput.accept = accept;
-	fileInput.setCssStyles({ display: "none" });
+	fileInput.hide();
 
 	// The native picker firing "cancel" (no selection) never triggers
 	// "change", so clean up the orphaned input then too.
