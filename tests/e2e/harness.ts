@@ -202,7 +202,7 @@ const createSharedHarness = createPluginHarness({
 			await restoreJourneyCache(obsidian);
 		}
 	},
-	symlinkArtifacts: ["main.js", "manifest.json"],
+	symlinkArtifacts: ["main.js", "manifest.json", "styles.css"],
 	// Module-relative, not process.cwd(): the factory otherwise compares dev-vault
 	// symlinks against <caller-cwd>/main.js, which breaks IDE-launched runs.
 	symlinkRepoRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),

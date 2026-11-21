@@ -238,19 +238,6 @@ if (!(HTMLElement.prototype as unknown as { toggle?: unknown }).toggle) {
 	};
 }
 
-// Obsidian augments HTMLElement with setCssStyles (assigns a batch of inline
-// styles, the sanctioned alternative to direct `el.style.x = y` writes). jsdom
-// has no such method, so mirror Obsidian's behaviour for component/DOM tests.
-if (!(HTMLElement.prototype as unknown as { setCssStyles?: unknown }).setCssStyles) {
-	(
-		HTMLElement.prototype as unknown as {
-			setCssStyles: (styles: Partial<CSSStyleDeclaration>) => void;
-		}
-	).setCssStyles = function (this: HTMLElement, styles: Partial<CSSStyleDeclaration>) {
-		Object.assign(this.style, styles);
-	};
-}
-
 // jsdom does not implement the Web Animations API, which Svelte 5 transitions
 // (e.g. transition:fade) rely on. Provide a minimal mock so components that use
 // transitions can be rendered and asserted on in component tests.

@@ -256,10 +256,10 @@ export default async function downloadEpisodeWithNotice(
 		showSuccess();
 	} catch (error: unknown) {
 		update((bodyEl) => {
-			const errorEl = bodyEl.createEl("p", {
+			bodyEl.createEl("p", {
+				cls: "pn-download-error",
 				text: `Download failed: ${getErrorMessage(error)}`,
 			});
-			errorEl.setCssStyles({ fontStyle: "italic" });
 		});
 		throw error;
 	} finally {
@@ -269,23 +269,8 @@ export default async function downloadEpisodeWithNotice(
 
 function createNoticeDoc(title: string) {
 	const doc = new DocumentFragment();
-	const container = doc.createDiv();
-	container.setCssStyles({ width: "100%", display: "flex" });
-
-	const titleEl = container.createSpan({ text: title });
-	titleEl.setCssStyles({
-		textAlign: "center",
-		fontWeight: "bold",
-		marginBottom: "0.5em",
-	});
-
-	const bodyEl = doc.createDiv();
-	bodyEl.setCssStyles({
-		display: "flex",
-		flexDirection: "column",
-		alignItems: "center",
-		justifyContent: "center",
-	});
+	doc.createDiv("pn-download-head").createSpan({ cls: "pn-download-title", text: title });
+	const bodyEl = doc.createDiv("pn-download-body");
 
 	return {
 		doc,

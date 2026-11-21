@@ -21,10 +21,10 @@ export default {
 			? path.join(os.homedir(), ".cache", "podnotes-e2e")
 			: "/private/tmp/podnotes-obsidian-e2e",
 	pluginId: "podnotes",
-	// PodNotes injects its CSS into main.js (svelte compilerOptions css:
-	// "injected"), so there is no styles.css artifact - only the manifest and the
-	// compiled bundle are symlinked into the vault.
-	pluginArtifacts: ["manifest.json", "main.js"],
+	// The view's components inject their CSS from main.js (svelte compilerOptions
+	// css: "injected"). styles.css holds only the rules for elements built outside
+	// the view.
+	pluginArtifacts: ["manifest.json", "main.js", "styles.css"],
 	// `defaultData` seeds a freshly provisioned vault's data.json. It mirrors
 	// DEFAULT_SETTINGS in src/constants.ts (plus the `schemaVersion: 2` persistence
 	// marker PodNotes writes alongside its settings) so a new vault loads with clean
