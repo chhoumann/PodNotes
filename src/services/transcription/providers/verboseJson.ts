@@ -64,7 +64,7 @@ const PLAIN_WORD =
 /** Opening quotes and brackets a word takes from the start of its token. */
 const LEADING = /^['“"‘([¿¡「『《【（]+/u;
 /** Closing punctuation a word takes from the end of its token, and none of `%` or `#`, which are words' own. */
-const TRAILING = /['.,?!;:…—–”"’)\]。，、？！；：」』》】）।॥]+$/u;
+const TRAILING = /['.,?!;:…—–”"’)\]。，、？！；：」』》】）।॥،؛؟]+$/u;
 
 /**
  * Qwen3 ASR, and the servers that run it or Whisper, can list words without punctuation and

@@ -1826,6 +1826,12 @@ describe("TranscriptionService", () => {
 					"we'll see. Okay.",
 				],
 				[
+					"gives Qwen's words Arabic punctuation from its text",
+					"مرحبا، كيف حالك؟ أنا بخير؛ شكرا.",
+					"مرحبا كيف حالك أنا بخير شكرا",
+					"مرحبا، كيف حالك؟ أنا بخير؛ شكرا.",
+				],
+				[
 					"adds nothing to Qwen's words when it lists quotes as entries of their own",
 					'"Hello world." Next!',
 					'" Hello world " Next',
